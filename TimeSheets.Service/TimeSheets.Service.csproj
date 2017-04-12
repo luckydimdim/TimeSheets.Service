@@ -28,6 +28,7 @@
     <PackageReference Include="Cmas.Infrastructure.Domain" Version="*" />
     <PackageReference Include="Cmas.BusinessLayers.TimeSheets" Version="*" />
     <PackageReference Include="Nancy" Version="2.0.0-clinteastwood" />
+    <PackageReference Include="Nancy.Validation.FluentValidation" Version="2.0.0-clinteastwood" />
   </ItemGroup>
 
 </Project>

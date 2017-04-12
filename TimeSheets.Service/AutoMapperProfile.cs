@@ -1,15 +1,15 @@
 ﻿using AutoMapper;
 using Cmas.BusinessLayers.TimeSheets.Entities;
-using Cmas.Services.TimeSheets.Dtos;
+using Cmas.Services.TimeSheets.Dtos.Responses;
 
-namespace Cmas.Services.Requests
+namespace Cmas.Services.TimeSheets
 {
     public class AutoMapperProfile : Profile
     {
         public AutoMapperProfile()
         {
-            CreateMap<TimeSheet, DetailedTimeSheetDto>();
-            CreateMap<TimeSheet, SimpleTimeSheetDto>();
+            CreateMap<TimeSheet, DetailedTimeSheetResponse>();
+            CreateMap<TimeSheet, SimpleTimeSheetResponse>();
         }
     }
 

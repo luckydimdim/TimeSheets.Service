@@ -1,13 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
+using Cmas.Services.TimeSheets.Dtos.Responses.Rate;
+using Cmas.Services.TimeSheets.Dtos.Responses.AdditionalData;
+using Newtonsoft.Json;
+using Cmas.Services.TimeSheets.Converters;
 
-namespace Cmas.Services.TimeSheets.Dtos
+namespace Cmas.Services.TimeSheets.Dtos.Responses
 {
     /// <summary>
     /// Табель учета рабочего времени. Расширенный 
     /// Используется для просмотра/редактирования табелей
     /// </summary>
-    public class DetailedTimeSheetDto
+    public class DetailedTimeSheetResponse
     {
         /// <summary>
         /// Идентификатор табеля
@@ -45,16 +49,6 @@ namespace Cmas.Services.TimeSheets.Dtos
         public string WorkName;
 
         /// <summary>
-        /// ФИО
-        /// </summary>
-        public string Assignee;
-
-        /// <summary>
-        /// Должность
-        /// </summary>
-        public string Position;
-
-        /// <summary>
         /// Сумма
         /// </summary>
         public double Amount;
@@ -69,19 +63,24 @@ namespace Cmas.Services.TimeSheets.Dtos
         /// </summary> 
 
         /// <summary>
-        /// Рабочее время в разрезе работ
-        /// Dictionary<{ID ставки}, IEnumerable<{время по каждому дню в месяце}>>
+        /// Ставки/группы ставок и потраченное время
         /// </summary>
-        public Dictionary<string, IEnumerable<double>> Times;
+        public IList<RateGroupResponse> RateGroups;
+
+        /// <summary>
+        /// Доп. данные (в зависимости от шаблона)
+        /// </summary>
+        [JsonConverter(typeof(BaseAdditionalDataConverter))]
+        public BaseAdditionalDataResponse AdditionalData;
 
         /// <summary>
         /// Примечания
         /// </summary>
         public string Notes;
 
-        public DetailedTimeSheetDto()
+        public DetailedTimeSheetResponse()
         {
-            Times = new Dictionary<string, IEnumerable<double>>();
+            RateGroups = new List<RateGroupResponse>();
         }
 
     }

@@ -1,18 +1,23 @@
 ﻿using System;
 
-namespace Cmas.Services.TimeSheets.Dtos
+namespace Cmas.Services.TimeSheets.Dtos.Responses
 {
     /// <summary>
     /// Табель учета рабочего времени. Упрощенный 
     /// Используется для вывода табелей в списках
     /// </summary>
-    public class SimpleTimeSheetDto
+    public class SimpleTimeSheetResponse
     {
         /// <summary>
         /// Идентификатор табеля
         /// </summary>
         public string Id;
 
+        /// <summary>
+        /// Идентификатор наряд заказа
+        /// </summary>
+        public string CallOffOrderId;
+        
         /// <summary>
         /// Дата и время создания
         /// </summary>
