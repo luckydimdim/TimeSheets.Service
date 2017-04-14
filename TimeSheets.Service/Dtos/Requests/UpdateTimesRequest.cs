@@ -6,7 +6,7 @@ namespace Cmas.Services.TimeSheets.Dtos.Requests
 {
     public class UpdateTimesRequest
     {
-        public string RateId;
+        public string Id;
         public IEnumerable<double> SpentTime;
     }
 }

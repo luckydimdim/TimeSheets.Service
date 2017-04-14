@@ -19,6 +19,8 @@ using Nancy;
 using Nancy.ModelBinding;
 using Nancy.Validation;
 using System.IO;
+using System.Threading;
+using Nancy.Responses.Negotiation;
 
 namespace Cmas.Services.TimeSheets
 {
@@ -51,6 +53,7 @@ namespace Cmas.Services.TimeSheets
         private readonly TimeSheetsBusinessLayer _timeSheetsBusinessLayer;
         private readonly IMapper _autoMapper;
 
+        #region Вынести отсюда
         private async Task<DetailedTimeSheetResponse> GetDetailedTimeSheetAsync(string timeSheetId)
         {
             var timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(timeSheetId);
@@ -148,7 +151,146 @@ namespace Cmas.Services.TimeSheets
             return result;
         }
 
-        public RequestsModule(ICommandBuilder commandBuilder, IQueryBuilder queryBuilder, IMapper autoMapper)
+        private TimeUnit ConvertToTimeUnit(string timeStr)
+        {
+            timeStr = timeStr.ToLower();
+
+            if (timeStr.Contains("час"))
+                return TimeUnit.Hour;
+            else if (timeStr.Contains("ден"))
+                return TimeUnit.Day;
+            else
+                return TimeUnit.None;
+        }
+
+        #endregion
+
+        #region Оставить в этом файле
+
+        private async Task<DetailedTimeSheetResponse> GetDetailedTimeSheetAsync(dynamic args, CancellationToken ct)
+        {
+            return await GetDetailedTimeSheetAsync(args.id);
+        }
+
+        private async Task<IEnumerable<SimpleTimeSheetResponse>> GetSimpleTimeSheetsAsync(dynamic args, CancellationToken ct)
+        {
+            string callOffOrderId = Request.Query["callOffOrderId"];
+
+            IEnumerable<TimeSheet> result = null;
+
+            if (callOffOrderId == null)
+                result = await _timeSheetsBusinessLayer.GetTimeSheets();
+            else
+                result = await _timeSheetsBusinessLayer.GetTimeSheetsByCallOffOrderId(callOffOrderId);
+
+            return await GetSimpleTimeSheetsAsync(result);
+        }
+
+        private async Task<DetailedTimeSheetResponse> CreateTimeSheetAsync(dynamic args, CancellationToken ct)
+        {
+            CreateTimeSheetRequest request = this.Bind<CreateTimeSheetRequest>();
+
+            var validationResult = this.Validate(request);
+
+            if (!validationResult.IsValid)
+            {
+                //return Negotiate.WithModel(validationResult).WithStatusCode(HttpStatusCode.BadRequest); //TODO: переделать в исключение
+            }
+
+            CallOffOrder callOffOrder = await _callOffOrdersBusinessLayer.GetCallOffOrder(request.CallOffOrderId);
+            IEnumerable<TimeSheet> timeSheets =
+                await _timeSheetsBusinessLayer.GetTimeSheetsByCallOffOrderId(request.CallOffOrderId);
+
+            // FIXME: Изменить после преобразования из string в DateTime
+            DateTime startDate = DateTime.Parse(callOffOrder.StartDate).ToUniversalTime();
+
+            // FIXME: Изменить после преобразования из string в DateTime
+            DateTime finishDate = DateTime.Parse(callOffOrder.FinishDate).ToUniversalTime();
+
+
+            string timeSheetId = null;
+            bool created = false;
+            while (startDate < finishDate)
+            {
+                var tsExist =
+                    timeSheets.Where(
+                        ts =>
+                            (ts.Month == startDate.Month &&
+                             ts.Year == startDate.Year)).Any();
+
+                if (tsExist)
+                {
+                    startDate = startDate.AddMonths(1);
+                    continue;
+                }
+                else
+                {
+                    timeSheetId = await _timeSheetsBusinessLayer.CreateTimeSheet(request.CallOffOrderId,
+                        startDate.Month, startDate.Year);
+                    created = true;
+                    break;
+                }
+            }
+
+            if (!created)
+            {
+                timeSheetId = await _timeSheetsBusinessLayer.CreateTimeSheet(request.CallOffOrderId,
+                    finishDate.Month, finishDate.Year);
+            }
+
+            return await GetDetailedTimeSheetAsync(timeSheetId);
+        }
+
+        private async Task<Negotiator> UpdateSpentTimeAsync(dynamic args, CancellationToken ct)
+        {
+            TimeSheet timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(args.id);
+
+            CallOffOrder callOffOrder = await _callOffOrdersBusinessLayer.GetCallOffOrder(timeSheet.CallOffOrderId);
+
+            var requests = this.Bind<IEnumerable<UpdateTimesRequest>>();
+
+            timeSheet.Amount = 0;
+            foreach (var request in requests)
+            {
+                var rateId = request.Id;
+
+                Rate callOffOrderRate = callOffOrder.Rates.Where(r => r.Id.ToString() == rateId).SingleOrDefault();
+
+                if (callOffOrderRate == null)
+                    throw new ArgumentException("rate not found: " + rateId);
+
+                if (!callOffOrderRate.IsRate)
+                    throw new ArgumentException(String.Format("rate {0} is group", rateId));
+
+                timeSheet.Amount += TimeSheetsBusinessLayer.GetAmount(callOffOrderRate.Amount,
+                    ConvertToTimeUnit(callOffOrderRate.UnitName), request.SpentTime);
+
+                timeSheet.SpentTime[request.Id] = request.SpentTime;
+            }
+
+            await _timeSheetsBusinessLayer.UpdateTimeSheet(timeSheet);
+
+            return Negotiate.WithStatusCode(HttpStatusCode.OK);
+        }
+
+        private async Task<Negotiator> UpdateTimeSheetAsync(dynamic args, CancellationToken ct)
+        {
+            UpdateTimeSheetRequest request = this.Bind<UpdateTimeSheetRequest>();
+
+            TimeSheet timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(args.id);
+
+            timeSheet.Notes = request.Notes;
+            timeSheet.Month = request.Month;
+            timeSheet.Year = request.Year;
+
+            await _timeSheetsBusinessLayer.UpdateTimeSheet(timeSheet);
+
+            return Negotiate.WithStatusCode(HttpStatusCode.OK);
+        }
+
+        #endregion
+
+       public RequestsModule(ICommandBuilder commandBuilder, IQueryBuilder queryBuilder, IMapper autoMapper)
             : base("/time-sheets")
         {
             _autoMapper = autoMapper;
@@ -163,168 +305,30 @@ namespace Cmas.Services.TimeSheets
             /// /time-sheets/ - получить список табелей
             /// /time-sheets?callOffOrderId={id} - получить табели по указанному договору
             /// </summary>
-            Get("/", async (args, ct) =>
-            {
-                string callOffOrderId = Request.Query["callOffOrderId"];
-
-                IEnumerable<TimeSheet> result = null;
-
-                if (callOffOrderId == null)
-                    result = await _timeSheetsBusinessLayer.GetTimeSheets();
-                else
-                    result = await _timeSheetsBusinessLayer.GetTimeSheetsByCallOffOrderId(callOffOrderId);
-
-                return await GetSimpleTimeSheetsAsync(result);
-            });
+            Get<IEnumerable<SimpleTimeSheetResponse>>("/", GetSimpleTimeSheetsAsync);
 
             /// <summary>
             /// /time-sheets/{id} - получить табель по указанному ID
             /// </summary>
-            /// <return>DetailedTimeSheetDto</return>
-            Get("/{id}", async args => { return await GetDetailedTimeSheetAsync(args.id); });
+            Get<DetailedTimeSheetResponse>("/{id}", GetDetailedTimeSheetAsync);
 
             /// <summary>
             /// Создать табель учета рабочего времени
             /// </summary>
-            /// <return>DetailedTimeSheetDto</return>
-            Post("/", async (args, ct) =>
-            {
-                CreateTimeSheetRequest request = this.Bind<CreateTimeSheetRequest>();
-
-                var validationResult = this.Validate(request);
-
-                if (!validationResult.IsValid)
-                {
-                    return Negotiate.WithModel(validationResult).WithStatusCode(HttpStatusCode.BadRequest);
-                }
-
-                CallOffOrder callOffOrder = await _callOffOrdersBusinessLayer.GetCallOffOrder(request.CallOffOrderId);
-                IEnumerable<TimeSheet> timeSheets =
-                    await _timeSheetsBusinessLayer.GetTimeSheetsByCallOffOrderId(request.CallOffOrderId);
-
-                // FIXME: Изменить после преобразования из string в DateTime
-                DateTime startDate = DateTime.Parse(callOffOrder.StartDate).ToUniversalTime();
-
-                // FIXME: Изменить после преобразования из string в DateTime
-                DateTime finishDate = DateTime.Parse(callOffOrder.FinishDate).ToUniversalTime();
-
-
-                string timeSheetId = null;
-                bool created = false;
-                while (startDate < finishDate)
-                {
-                    var tsExist =
-                        timeSheets.Where(
-                            ts =>
-                                (ts.Month == startDate.Month &&
-                                 ts.Year == startDate.Year)).Any();
-
-                    if (tsExist)
-                    {
-                        startDate = startDate.AddMonths(1);
-                        continue;
-                    }
-                    else
-                    {
-                        timeSheetId = await _timeSheetsBusinessLayer.CreateTimeSheet(request.CallOffOrderId,
-                            startDate.Month, startDate.Year);
-                        created = true;
-                        break;
-                    }
-                }
-
-                if (!created)
-                {
-                    timeSheetId = await _timeSheetsBusinessLayer.CreateTimeSheet(request.CallOffOrderId,
-                        finishDate.Month, finishDate.Year);
-                }
-
-                return await GetDetailedTimeSheetAsync(timeSheetId);
-            });
+            Post<DetailedTimeSheetResponse>("/", CreateTimeSheetAsync);
 
             /// <summary>
             /// Обновить отработанное время по работам
             /// </summary>
-            /// <return>DetailedTimeSheetDto</return>
-            Put("/{id}/spent-time", async args =>
-            {
-                TimeSheet timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(args.id);
-
-                CallOffOrder callOffOrder = await _callOffOrdersBusinessLayer.GetCallOffOrder(timeSheet.CallOffOrderId);
-
-                var requests = this.Bind<IEnumerable<UpdateTimesRequest>>();
-
-                timeSheet.Amount = 0;
-                foreach (var request in requests)
-                {
-                    var rateId = request.RateId;
-
-                    Rate callOffOrderRate = callOffOrder.Rates.Where(r => r.Id.ToString() == rateId).SingleOrDefault();
-
-                    if (callOffOrderRate == null)
-                        throw new ArgumentException("rate not found: " + rateId);
-
-                    if (!callOffOrderRate.IsRate)
-                        throw new ArgumentException(String.Format("rate {0} is group", rateId));
-
-                    timeSheet.Amount += TimeSheetsBusinessLayer.GetAmount(callOffOrderRate.Amount,
-                        ConvertToTimeUnit(callOffOrderRate.UnitName), request.SpentTime);
-
-                    timeSheet.SpentTime[request.RateId] = request.SpentTime;
-                }
-
-                await _timeSheetsBusinessLayer.UpdateTimeSheet(timeSheet);
-
-                return Negotiate.WithStatusCode(HttpStatusCode.OK);
-            });
+            Put<Negotiator>("/{id}/spent-time", UpdateSpentTimeAsync);
 
             /// <summary>
-            /// Обновить примечание
+            /// Обновить табель
             /// </summary>
-            /// <return>DetailedTimeSheetDto</return>
-            Put("/{id}/notes", async args =>
-            {
-                var reader = new StreamReader(Request.Body);
-                string notes = reader.ReadToEnd();
+            Put<Negotiator>("/{id}", UpdateTimeSheetAsync);
 
-                TimeSheet timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(args.id);
-
-                timeSheet.Notes = notes;
-
-                await _timeSheetsBusinessLayer.UpdateTimeSheet(timeSheet);
-
-                return Negotiate.WithStatusCode(HttpStatusCode.OK);
-            });
-
-            /// <summary>
-            /// Обновить период (месяц, год)
-            /// </summary>
-            /// <return>DetailedTimeSheetDto</return>
-            Put("/{id}/period", async args =>
-            {
-                UpdatePeriodRequest period = this.Bind<UpdatePeriodRequest>();
-
-                TimeSheet timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(args.id);
-
-                timeSheet.Month = period.Month;
-                timeSheet.Year = period.Year;
-
-                await _timeSheetsBusinessLayer.UpdateTimeSheet(timeSheet);
-
-                return Negotiate.WithStatusCode(HttpStatusCode.OK);
-            });
         }
 
-        private TimeUnit ConvertToTimeUnit(string timeStr)
-        {
-            timeStr = timeStr.ToLower();
 
-            if (timeStr.Contains("час"))
-                return TimeUnit.Hour;
-            else if (timeStr.Contains("ден"))
-                return TimeUnit.Day;
-            else
-                return TimeUnit.None;
-        }
     }
 }
