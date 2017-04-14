@@ -54,6 +54,7 @@ namespace Cmas.Services.TimeSheets
         private readonly IMapper _autoMapper;
 
         #region Вынести отсюда
+
         private async Task<DetailedTimeSheetResponse> GetDetailedTimeSheetAsync(string timeSheetId)
         {
             var timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(timeSheetId);
@@ -172,7 +173,8 @@ namespace Cmas.Services.TimeSheets
             return await GetDetailedTimeSheetAsync(args.id);
         }
 
-        private async Task<IEnumerable<SimpleTimeSheetResponse>> GetSimpleTimeSheetsAsync(dynamic args, CancellationToken ct)
+        private async Task<IEnumerable<SimpleTimeSheetResponse>> GetSimpleTimeSheetsAsync(dynamic args,
+            CancellationToken ct)
         {
             string callOffOrderId = Request.Query["callOffOrderId"];
 
@@ -243,16 +245,18 @@ namespace Cmas.Services.TimeSheets
 
         private async Task<Negotiator> UpdateSpentTimeAsync(dynamic args, CancellationToken ct)
         {
+            var request = this.Bind<UpdateTimesRequest>(new BindingConfig {BodyOnly = true});
+
             TimeSheet timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(args.id);
 
             CallOffOrder callOffOrder = await _callOffOrdersBusinessLayer.GetCallOffOrder(timeSheet.CallOffOrderId);
 
-            var requests = this.Bind<IEnumerable<UpdateTimesRequest>>();
+            timeSheet.SpentTime[request.Id] = request.SpentTime;
 
             timeSheet.Amount = 0;
-            foreach (var request in requests)
+            foreach (var rateId in timeSheet.SpentTime.Keys)
             {
-                var rateId = request.Id;
+                var spentTime = timeSheet.SpentTime[rateId];
 
                 Rate callOffOrderRate = callOffOrder.Rates.Where(r => r.Id.ToString() == rateId).SingleOrDefault();
 
@@ -263,9 +267,7 @@ namespace Cmas.Services.TimeSheets
                     throw new ArgumentException(String.Format("rate {0} is group", rateId));
 
                 timeSheet.Amount += TimeSheetsBusinessLayer.GetAmount(callOffOrderRate.Amount,
-                    ConvertToTimeUnit(callOffOrderRate.UnitName), request.SpentTime);
-
-                timeSheet.SpentTime[request.Id] = request.SpentTime;
+                    ConvertToTimeUnit(callOffOrderRate.UnitName), spentTime);
             }
 
             await _timeSheetsBusinessLayer.UpdateTimeSheet(timeSheet);
@@ -290,7 +292,7 @@ namespace Cmas.Services.TimeSheets
 
         #endregion
 
-       public RequestsModule(ICommandBuilder commandBuilder, IQueryBuilder queryBuilder, IMapper autoMapper)
+        public RequestsModule(ICommandBuilder commandBuilder, IQueryBuilder queryBuilder, IMapper autoMapper)
             : base("/time-sheets")
         {
             _autoMapper = autoMapper;
@@ -326,9 +328,6 @@ namespace Cmas.Services.TimeSheets
             /// Обновить табель
             /// </summary>
             Put<Negotiator>("/{id}", UpdateTimeSheetAsync);
-
         }
-
-
     }
 }
