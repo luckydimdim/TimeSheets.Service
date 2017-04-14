@@ -1,5 +1,4 @@
-﻿using Cmas.Services.TimeSheets.Dtos;
-using Cmas.Services.TimeSheets.Dtos.Requests;
+﻿using Cmas.Services.TimeSheets.Dtos.Requests;
 using FluentValidation;
 
 namespace Cmas.Services.TimeSheets.Validation
@@ -8,7 +7,7 @@ namespace Cmas.Services.TimeSheets.Validation
     {
         public CreateTimeSheetValidator()
         {
-            RuleFor(request => request.CallOffOrderId).NotEmpty().WithMessage("You must specify a call-off-order's id");
+            RuleFor(request => request.CallOffOrderId).NotEmpty().WithMessage("You must specify a call-off-order id");
         }
     }
 }

@@ -21,6 +21,7 @@ using Nancy.Validation;
 using System.IO;
 using System.Threading;
 using Nancy.Responses.Negotiation;
+using Cmas.Infrastructure.ErrorHandler;
 
 namespace Cmas.Services.TimeSheets
 {
@@ -195,8 +196,8 @@ namespace Cmas.Services.TimeSheets
             var validationResult = this.Validate(request);
 
             if (!validationResult.IsValid)
-            {
-                //return Negotiate.WithModel(validationResult).WithStatusCode(HttpStatusCode.BadRequest); //TODO: переделать в исключение
+            { 
+                 throw new ValidationErrorException(validationResult.FormattedErrors);
             }
 
             CallOffOrder callOffOrder = await _callOffOrdersBusinessLayer.GetCallOffOrder(request.CallOffOrderId);
@@ -246,6 +247,13 @@ namespace Cmas.Services.TimeSheets
         private async Task<Negotiator> UpdateSpentTimeAsync(dynamic args, CancellationToken ct)
         {
             var request = this.Bind<UpdateTimesRequest>(new BindingConfig {BodyOnly = true});
+
+            var validationResult = this.Validate(request);
+
+            if (!validationResult.IsValid)
+            {
+                throw new ValidationErrorException(validationResult.FormattedErrors);
+            }
 
             TimeSheet timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(args.id);
 
@@ -328,6 +336,7 @@ namespace Cmas.Services.TimeSheets
             /// Обновить табель
             /// </summary>
             Put<Negotiator>("/{id}", UpdateTimeSheetAsync);
+
         }
     }
 }
