@@ -154,7 +154,9 @@ namespace Cmas.Services.TimeSheets
             result.AvailablePeriodsFrom = startDate;
             result.AvailablePeriodsTo = finishDate;
 
-
+            result.StatusSysName = timeSheet.Status.ToString();
+            result.StatusName = TimeSheetsBusinessLayer.GetStatusName(timeSheet.Status);
+             
             return result;
         }
 
@@ -254,6 +256,8 @@ namespace Cmas.Services.TimeSheets
                 simpleTimeSheet.Position = callOffOrder.Position;
                 simpleTimeSheet.WorkName = callOffOrder.Name;
                 simpleTimeSheet.CallOffOrderId = callOffOrder.Id;
+                simpleTimeSheet.StatusSysName = timeSheet.Status.ToString();
+                simpleTimeSheet.StatusName = TimeSheetsBusinessLayer.GetStatusName(timeSheet.Status);
 
                 result.Add(simpleTimeSheet);
             }

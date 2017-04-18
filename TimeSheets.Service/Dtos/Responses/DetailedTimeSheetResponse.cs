@@ -59,8 +59,15 @@ namespace Cmas.Services.TimeSheets.Dtos.Responses
 
 
         /// <summary>
-        /// TODO: Статус
+        ///  Системное имя статуса
         /// </summary> 
+        public string StatusSysName;
+
+        /// <summary>
+        ///  Наименованеи статуса
+        /// </summary> 
+        public string StatusName;
+
 
         /// <summary>
         /// Ставки/группы ставок и потраченное время

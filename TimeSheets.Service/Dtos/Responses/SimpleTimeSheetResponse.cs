@@ -52,9 +52,15 @@ namespace Cmas.Services.TimeSheets.Dtos.Responses
         /// TODO: Валюта
         /// </summary>
 
+        /// <summary>
+        ///  Системное имя статуса
+        /// </summary> 
+        public string StatusSysName;
 
         /// <summary>
-        /// TODO: Статус
+        ///  Наименованеи статуса
         /// </summary> 
+        public string StatusName;
+
     }
 }
