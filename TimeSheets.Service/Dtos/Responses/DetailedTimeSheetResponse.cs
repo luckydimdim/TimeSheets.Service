@@ -77,10 +77,14 @@ namespace Cmas.Services.TimeSheets.Dtos.Responses
         /// Примечания
         /// </summary>
         public string Notes;
+         
+        public DateTime AvailablePeriodsFrom;
+
+        public DateTime AvailablePeriodsTo;
 
         public DetailedTimeSheetResponse()
         {
-            RateGroups = new List<RateGroupResponse>();
+            RateGroups = new List<RateGroupResponse>(); 
         }
 
     }

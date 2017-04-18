@@ -77,7 +77,7 @@ namespace Cmas.Services.TimeSheets
         private async Task<DetailedTimeSheetResponse> GetDetailedTimeSheetHandlerAsync(dynamic args,
             CancellationToken ct)
         {
-            return await _timeSheetsService.GetDetailedTimeSheetAsync(args.id);
+            return await _timeSheetsService.GetDetailedTimeSheetAsync((string)args.id);
         }
 
         private async Task<IEnumerable<SimpleTimeSheetResponse>> GetSimpleTimeSheetsByCallOffOrderHandlerAsync(
@@ -90,7 +90,7 @@ namespace Cmas.Services.TimeSheets
         private async Task<IEnumerable<SimpleTimeSheetResponse>> GetSimpleTimeSheetsHandlerAsync(dynamic args,
             CancellationToken ct)
         {
-            return await _timeSheetsService.GetTimeSheetsAsync();
+            return await _timeSheetsService.GetSimpleTimeSheetsAsync();
         }
 
         private Task<DetailedTimeSheetResponse> CreateTimeSheetHandlerAsync(dynamic args, CancellationToken ct)

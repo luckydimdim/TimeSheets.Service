@@ -10,6 +10,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Cmas.BusinessLayers.CallOffOrders.Entities;
 using Cmas.BusinessLayers.TimeSheets.Entities;
+using Cmas.Infrastructure.ErrorHandler;
 using Cmas.Services.TimeSheets.Dtos.Responses;
 using Cmas.Services.TimeSheets.Dtos.Responses.AdditionalData;
 using Cmas.Services.TimeSheets.Dtos.Responses.Rate;
@@ -28,15 +29,13 @@ namespace Cmas.Services.TimeSheets
             Dictionary<string, IEnumerable<double>> spentTime)
         {
             var result = new RateResponse();
-            string rateId = callOffOrderRate.Id.ToString();
+            var rateId = callOffOrderRate.Id.ToString();
 
             result.Name = callOffOrderRate.Name;
             result.Id = callOffOrderRate.Id.ToString();
 
             if (spentTime != null && spentTime.ContainsKey(rateId))
-            {
                 result.SpentTime = spentTime[rateId].ToList();
-            }
 
             return result;
         }
@@ -61,6 +60,8 @@ namespace Cmas.Services.TimeSheets
             _timeSheetsBusinessLayer = new TimeSheetsBusinessLayer(_commandBuilder, _queryBuilder);
         }
 
+        #region GetDetailedTimeSheet
+
         public async Task<DetailedTimeSheetResponse> GetDetailedTimeSheetAsync(string timeSheetId)
         {
             var timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(timeSheetId);
@@ -68,16 +69,17 @@ namespace Cmas.Services.TimeSheets
             return await GetDetailedTimeSheetAsync(timeSheet);
         }
 
-        public async Task<DetailedTimeSheetResponse> GetDetailedTimeSheetAsync(TimeSheet timeSheet)
+        private async Task<DetailedTimeSheetResponse> GetDetailedTimeSheetAsync(TimeSheet timeSheet)
         {
-            CallOffOrder callOffOrder = await _callOffOrdersBusinessLayer.GetCallOffOrder(timeSheet.CallOffOrderId);
+            var callOffOrder = await _callOffOrdersBusinessLayer.GetCallOffOrder(timeSheet.CallOffOrderId);
 
-            return GetDetailedTimeSheet(timeSheet, callOffOrder);
+            return await GetDetailedTimeSheetAsync(timeSheet, callOffOrder);
         }
 
-        public DetailedTimeSheetResponse GetDetailedTimeSheet(TimeSheet timeSheet, CallOffOrder callOffOrder)
+        private async Task<DetailedTimeSheetResponse> GetDetailedTimeSheetAsync(TimeSheet timeSheet,
+            CallOffOrder callOffOrder)
         {
-            DetailedTimeSheetResponse result = _autoMapper.Map<DetailedTimeSheetResponse>(timeSheet);
+            var result = _autoMapper.Map<DetailedTimeSheetResponse>(timeSheet);
 
             result.WorkName = callOffOrder.Name;
 
@@ -89,7 +91,7 @@ namespace Cmas.Services.TimeSheets
             {
                 result.AdditionalData = new SouthTambeyAdditionalDataResponse();
 
-                var additionalData = (result.AdditionalData as SouthTambeyAdditionalDataResponse);
+                var additionalData = result.AdditionalData as SouthTambeyAdditionalDataResponse;
                 additionalData.EmployeeNumber = callOffOrder.EmployeeNumber;
                 additionalData.MobDate = callOffOrder.MobDate;
                 additionalData.MobPlanReference = callOffOrder.MobPlanReference;
@@ -103,14 +105,13 @@ namespace Cmas.Services.TimeSheets
 
             // проходим по ставкам наряд заказа
             foreach (var callOffOrderRate in callOffOrder.Rates)
-            {
                 if (!callOffOrderRate.IsRate) // группа
                 {
                     var timeSheetRateGroup = new RateGroupResponse();
                     timeSheetRateGroup.Name = callOffOrderRate.Name;
 
                     var groupRates =
-                        callOffOrder.Rates.Where(r => (r.IsRate && r.ParentId == callOffOrderRate.Id)).Select(r => r);
+                        callOffOrder.Rates.Where(r => r.IsRate && r.ParentId == callOffOrderRate.Id).Select(r => r);
 
 
                     foreach (var groupRate in groupRates)
@@ -132,33 +133,34 @@ namespace Cmas.Services.TimeSheets
 
                     result.RateGroups.Add(timeSheetRateGroup);
                 }
-            }
+
+            DateTime startDate = DateTime.Parse(callOffOrder.StartDate).ToUniversalTime();
+            DateTime finishDate = DateTime.Parse(callOffOrder.FinishDate).ToUniversalTime();
+
+            var lastTimeSheet = (await _timeSheetsBusinessLayer.GetTimeSheetsByCallOffOrderId(callOffOrder.Id))
+                .Where(t => t.Id != timeSheet.Id)
+                .OrderBy(t => t.Year)
+                .ThenBy(t => t.Month)
+                .LastOrDefault();
+
+            if (lastTimeSheet != null)
+                startDate = new DateTime(lastTimeSheet.Year, lastTimeSheet.Month, 1).ToUniversalTime();
+
+
+            if (startDate.AddMonths(1) > finishDate)
+                startDate = startDate.AddMonths(1);
+            
+
+            result.AvailablePeriodsFrom = startDate;
+            result.AvailablePeriodsTo = finishDate;
+
 
             return result;
         }
 
-        public async Task<IEnumerable<SimpleTimeSheetResponse>> GetSimpleTimeSheetsAsync(
-            IEnumerable<TimeSheet> timeSheets)
-        {
-            var result = new List<SimpleTimeSheetResponse>();
+        #endregion
 
-            foreach (var timeSheet in timeSheets)
-            {
-                CallOffOrder callOffOrder = await _callOffOrdersBusinessLayer.GetCallOffOrder(timeSheet.CallOffOrderId);
-                SimpleTimeSheetResponse simpleTimeSheet = _autoMapper.Map<SimpleTimeSheetResponse>(timeSheet);
-
-                simpleTimeSheet.Assignee = callOffOrder.Assignee;
-                simpleTimeSheet.Position = callOffOrder.Position;
-                simpleTimeSheet.WorkName = callOffOrder.Name;
-                simpleTimeSheet.CallOffOrderId = callOffOrder.Id;
-
-                result.Add(simpleTimeSheet);
-            }
-
-            return result;
-        }
-
-        public TimeUnit ConvertToTimeUnit(string timeStr)
+        private TimeUnit ConvertToTimeUnit(string timeStr)
         {
             timeStr = timeStr.ToLower();
 
@@ -172,9 +174,9 @@ namespace Cmas.Services.TimeSheets
 
         public async Task UpdateSpentTimeAsync(string timeSheetId, string rateId, IEnumerable<double> spentTime)
         {
-            TimeSheet timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(timeSheetId);
+            var timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(timeSheetId);
 
-            CallOffOrder callOffOrder = await _callOffOrdersBusinessLayer.GetCallOffOrder(timeSheet.CallOffOrderId);
+            var callOffOrder = await _callOffOrdersBusinessLayer.GetCallOffOrder(timeSheet.CallOffOrderId);
 
             timeSheet.SpentTime[rateId] = spentTime;
 
@@ -185,9 +187,9 @@ namespace Cmas.Services.TimeSheets
 
         public async Task UpdateAmountAsync(string timeSheetId)
         {
-            TimeSheet timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(timeSheetId);
+            var timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(timeSheetId);
 
-            CallOffOrder callOffOrder = await _callOffOrdersBusinessLayer.GetCallOffOrder(timeSheet.CallOffOrderId);
+            var callOffOrder = await _callOffOrdersBusinessLayer.GetCallOffOrder(timeSheet.CallOffOrderId);
 
             timeSheet.Amount = GetAmount(timeSheet, callOffOrder);
 
@@ -202,14 +204,14 @@ namespace Cmas.Services.TimeSheets
             {
                 var timeSheetSpantTime = timeSheet.SpentTime[timeSheetRateId];
 
-                Rate callOffOrderRate = callOffOrder.Rates.Where(r => r.Id.ToString() == timeSheetRateId)
+                var callOffOrderRate = callOffOrder.Rates.Where(r => r.Id.ToString() == timeSheetRateId)
                     .SingleOrDefault();
 
                 if (callOffOrderRate == null)
                     throw new ArgumentException("rate not found: " + timeSheetRateId);
 
                 if (!callOffOrderRate.IsRate)
-                    throw new ArgumentException(String.Format("rate {0} is group", timeSheetRateId));
+                    throw new ArgumentException(string.Format("rate {0} is group", timeSheetRateId));
 
                 result += TimeSheetsBusinessLayer.GetAmount(callOffOrderRate.Amount,
                     ConvertToTimeUnit(callOffOrderRate.UnitName), timeSheetSpantTime);
@@ -220,7 +222,7 @@ namespace Cmas.Services.TimeSheets
 
         public async Task UpdateTimeSheetAsync(string timeSheetId, string notes, int month, int year)
         {
-            TimeSheet timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(timeSheetId);
+            var timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(timeSheetId);
 
             timeSheet.Notes = notes;
             timeSheet.Month = month;
@@ -229,19 +231,103 @@ namespace Cmas.Services.TimeSheets
             await _timeSheetsBusinessLayer.UpdateTimeSheet(timeSheet);
         }
 
-        public async Task<IEnumerable<SimpleTimeSheetResponse>> GetTimeSheetsAsync()
+        #region GetSimpleTimeSheets
+
+        public async Task<IEnumerable<SimpleTimeSheetResponse>> GetSimpleTimeSheetsAsync()
         {
-            IEnumerable<TimeSheet> response = await _timeSheetsBusinessLayer.GetTimeSheets();
+            var response = await _timeSheetsBusinessLayer.GetTimeSheets();
 
             return await GetSimpleTimeSheetsAsync(response);
         }
 
+        private async Task<IEnumerable<SimpleTimeSheetResponse>> GetSimpleTimeSheetsAsync(
+            IEnumerable<TimeSheet> timeSheets)
+        {
+            var result = new List<SimpleTimeSheetResponse>();
+
+            foreach (var timeSheet in timeSheets)
+            {
+                var callOffOrder = await _callOffOrdersBusinessLayer.GetCallOffOrder(timeSheet.CallOffOrderId);
+                var simpleTimeSheet = _autoMapper.Map<SimpleTimeSheetResponse>(timeSheet);
+
+                simpleTimeSheet.Assignee = callOffOrder.Assignee;
+                simpleTimeSheet.Position = callOffOrder.Position;
+                simpleTimeSheet.WorkName = callOffOrder.Name;
+                simpleTimeSheet.CallOffOrderId = callOffOrder.Id;
+
+                result.Add(simpleTimeSheet);
+            }
+
+            return result;
+        }
+
+        #endregion
+
         public async Task<IEnumerable<SimpleTimeSheetResponse>> GetTimeSheetsByCallOffOrderAsync(string callOffOrderId)
         {
-            IEnumerable<TimeSheet> response =
+            var response =
                 await _timeSheetsBusinessLayer.GetTimeSheetsByCallOffOrderId(callOffOrderId);
 
             return await GetSimpleTimeSheetsAsync(response);
+        }
+
+        /// <summary>
+        /// Валидация табеля 
+        /// </summary>
+        /// <param name="timeSheet">Табель</param>
+        /// <param name="callOffOrder">Наряд заказ, по кторому строится табель</param>
+        /// <returns>Список предупреждений или пустой массив</returns>
+        private IEnumerable<string> Validate(TimeSheet timeSheet, CallOffOrder callOffOrder)
+        {
+            var result = new List<string>();
+
+
+            var containsFilledRate = false;
+
+            foreach (var kvp in timeSheet.SpentTime)
+            {
+                var rateId = kvp.Key;
+                var rateSpentTime = kvp.Value;
+
+                var sum = kvp.Value.Sum(r => r);
+
+                if (sum > 0)
+                    containsFilledRate = true;
+
+                var callOffRate = callOffOrder.Rates.Where(r => r.Id.ToString() == rateId).SingleOrDefault();
+
+                if (callOffRate == null)
+                    throw new Exception(string.Format("Ставка с id {0} не найдена в наряд заказе с id {1}", rateId,
+                        callOffOrder.Id));
+
+
+                var timeUnit = ConvertToTimeUnit(callOffRate.UnitName);
+
+                switch (timeUnit)
+                {
+                    case TimeUnit.Day:
+                        if (kvp.Value.Where(v => v > 1).Any())
+                            result.Add(string.Format("'{0}' содержит значения больше 1", callOffRate.Name));
+                        break;
+                    case TimeUnit.Hour:
+                        if (kvp.Value.Where(v => v > 24).Any())
+                            result.Add(string.Format("'{0}' содержит значения больше 24", callOffRate.Name));
+                        break;
+                    default:
+                        throw new Exception(string.Format("Неизвестный тип ставки callOffRate.UnitName  {0}",
+                            callOffRate.UnitName));
+                }
+            }
+
+            if (!containsFilledRate)
+                result.Add("Табель не заполнен");
+
+            if (timeSheet.Amount <= 0)
+            {
+                result.Add("У табеля нулевая сумма");
+            }
+
+            return result;
         }
     }
 }
