@@ -4,7 +4,7 @@ using FluentValidation;
 
 namespace Cmas.Services.TimeSheets.Validation
 {
-    public class UpdateSpentTimeValidator : AbstractValidator<UpdateTimesRequest>
+    public class UpdateSpentTimeValidator : AbstractValidator<UpdateSpentTimesRequest>
     {
         public UpdateSpentTimeValidator()
         {

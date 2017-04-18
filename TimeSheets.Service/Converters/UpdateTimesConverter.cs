@@ -9,7 +9,7 @@ namespace Cmas.Services.TimeSheets.Converters
     {
         public override bool CanConvert(Type objectType)
         {
-            return objectType == typeof(UpdateTimesRequest);
+            return objectType == typeof(UpdateSpentTimesRequest);
         }
 
         public override object ReadJson(JsonReader reader, Type objectType, object existingValue,
@@ -17,7 +17,7 @@ namespace Cmas.Services.TimeSheets.Converters
         {
             IDictionary<string, IEnumerable<double>> result;
 
-            if (objectType != typeof(UpdateTimesRequest))
+            if (objectType != typeof(UpdateSpentTimesRequest))
                 throw new ArgumentException("Unsupported type: " + objectType.ToString());
 
             result =

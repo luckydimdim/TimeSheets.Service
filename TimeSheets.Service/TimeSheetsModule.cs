@@ -25,228 +25,82 @@ using Cmas.Infrastructure.ErrorHandler;
 
 namespace Cmas.Services.TimeSheets
 {
-    public static class ConverterHelper
-    {
-        public static RateResponse ConvertToTimeSheetRate(this Rate callOffOrderRate,
-            Dictionary<string, IEnumerable<double>> spentTime)
-        {
-            var result = new RateResponse();
-            string rateId = callOffOrderRate.Id.ToString();
-
-            result.Name = callOffOrderRate.Name;
-            result.Id = callOffOrderRate.Id.ToString();
-
-            if (spentTime != null && spentTime.ContainsKey(rateId))
-            {
-                result.SpentTime = spentTime[rateId].ToList();
-            }
-
-            return result;
-        }
-    }
-
     public class RequestsModule : NancyModule
     {
-        private readonly ICommandBuilder _commandBuilder;
-        private readonly IQueryBuilder _queryBuilder;
-        private readonly CallOffOrdersBusinessLayer _callOffOrdersBusinessLayer;
-        private readonly ContractBusinessLayer _contractBusinessLayer;
-        private readonly TimeSheetsBusinessLayer _timeSheetsBusinessLayer;
-        private readonly IMapper _autoMapper;
+        private readonly TimeSheetsService _timeSheetsService;
 
-        #region Вынести отсюда
-
-        private async Task<DetailedTimeSheetResponse> GetDetailedTimeSheetAsync(string timeSheetId)
+        public RequestsModule(IServiceProvider serviceProvider) : base("/time-sheets")
         {
-            var timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(timeSheetId);
+            _timeSheetsService = new TimeSheetsService(serviceProvider);
 
-            return await GetDetailedTimeSheetAsync(timeSheet);
+            /// <summary>
+            /// /time-sheets/ - получить список табелей
+            /// </summary>
+            Get<IEnumerable<SimpleTimeSheetResponse>>("/", GetSimpleTimeSheetsHandlerAsync,
+                (ctx) => !ctx.Request.Query.ContainsKey("callOffOrderId"));
+
+            /// <summary>
+            /// /time-sheets?callOffOrderId={id} - получить табели по указанному договору
+            /// </summary>
+            Get<IEnumerable<SimpleTimeSheetResponse>>("/",
+                GetSimpleTimeSheetsByCallOffOrderHandlerAsync,
+                (ctx) => ctx.Request.Query.ContainsKey("callOffOrderId"));
+
+            /// <summary>
+            /// /time-sheets/{id} - получить табель по указанному ID
+            /// </summary>
+            Get<DetailedTimeSheetResponse>("/{id}", GetDetailedTimeSheetHandlerAsync);
+
+            /// <summary>
+            /// Создать табель учета рабочего времени
+            /// </summary>
+            Post<DetailedTimeSheetResponse>("/", CreateTimeSheetHandlerAsync);
+
+            /// <summary>
+            /// Обновить отработанное время по работам
+            /// </summary>
+            Put<Negotiator>("/{id}/spent-time", UpdateSpentTimeHandlerAsync);
+
+            /// <summary>
+            /// Пересчитать сумму по табелю
+            /// </summary>
+            Post<Negotiator>("/{id}/amount", UpdateAmountHandlerAsync);
+             
+            /// <summary>
+            /// Обновить табель
+            /// </summary>
+            Put<Negotiator>("/{id}", UpdateTimeSheetHandlerAsync);
         }
 
-        private async Task<DetailedTimeSheetResponse> GetDetailedTimeSheetAsync(TimeSheet timeSheet)
-        {
-            CallOffOrder callOffOrder = await _callOffOrdersBusinessLayer.GetCallOffOrder(timeSheet.CallOffOrderId);
+        #region Обрабочтики
 
-            return GetDetailedTimeSheet(timeSheet, callOffOrder);
-        }
-
-        private DetailedTimeSheetResponse GetDetailedTimeSheet(TimeSheet timeSheet, CallOffOrder callOffOrder)
-        {
-            DetailedTimeSheetResponse result = _autoMapper.Map<DetailedTimeSheetResponse>(timeSheet);
-
-            result.WorkName = callOffOrder.Name;
-
-            if (callOffOrder.TemplateSysName.ToLower() == "default")
-            {
-                result.AdditionalData = new DefaultAdditionalDataResponse();
-            }
-            else if (callOffOrder.TemplateSysName.ToLower() == "southtambey")
-            {
-                result.AdditionalData = new SouthTambeyAdditionalDataResponse();
-
-                var additionalData = (result.AdditionalData as SouthTambeyAdditionalDataResponse);
-                additionalData.EmployeeNumber = callOffOrder.EmployeeNumber;
-                additionalData.MobDate = callOffOrder.MobDate;
-                additionalData.MobPlanReference = callOffOrder.MobPlanReference;
-                additionalData.Paaf = callOffOrder.Paaf;
-                additionalData.PositionNumber = callOffOrder.PositionNumber;
-                additionalData.PersonnelSource = callOffOrder.PersonnelSource;
-            }
-
-            result.AdditionalData.Assignee = callOffOrder.Assignee;
-            result.AdditionalData.Position = callOffOrder.Position;
-
-            // проходим по ставкам наряд заказа
-            foreach (var callOffOrderRate in callOffOrder.Rates)
-            {
-                if (!callOffOrderRate.IsRate) // группа
-                {
-                    var timeSheetRateGroup = new RateGroupResponse();
-                    timeSheetRateGroup.Name = callOffOrderRate.Name;
-
-                    var groupRates =
-                        callOffOrder.Rates.Where(r => (r.IsRate && r.ParentId == callOffOrderRate.Id)).Select(r => r);
-
-
-                    foreach (var groupRate in groupRates)
-                    {
-                        var timeSheetRate =
-                            groupRate.ConvertToTimeSheetRate(timeSheet.SpentTime);
-
-                        timeSheetRateGroup.Rates.Add(timeSheetRate);
-                    }
-
-                    result.RateGroups.Add(timeSheetRateGroup);
-                }
-                else if (callOffOrderRate.IsRate && !callOffOrderRate.ParentId.HasValue)
-                {
-                    var timeSheetRateGroup = new RateGroupResponse();
-
-                    var timeSheetRate = callOffOrderRate.ConvertToTimeSheetRate(timeSheet.SpentTime);
-                    timeSheetRateGroup.Rates.Add(timeSheetRate);
-
-                    result.RateGroups.Add(timeSheetRateGroup);
-                }
-            }
-
-            return result;
-        }
-
-        private async Task<IEnumerable<SimpleTimeSheetResponse>> GetSimpleTimeSheetsAsync(
-            IEnumerable<TimeSheet> timeSheets)
-        {
-            var result = new List<SimpleTimeSheetResponse>();
-
-            foreach (var timeSheet in timeSheets)
-            {
-                CallOffOrder callOffOrder = await _callOffOrdersBusinessLayer.GetCallOffOrder(timeSheet.CallOffOrderId);
-                SimpleTimeSheetResponse simpleTimeSheet = _autoMapper.Map<SimpleTimeSheetResponse>(timeSheet);
-
-                simpleTimeSheet.Assignee = callOffOrder.Assignee;
-                simpleTimeSheet.Position = callOffOrder.Position;
-                simpleTimeSheet.WorkName = callOffOrder.Name;
-                simpleTimeSheet.CallOffOrderId = callOffOrder.Id;
-
-                result.Add(simpleTimeSheet);
-            }
-
-            return result;
-        }
-
-        private TimeUnit ConvertToTimeUnit(string timeStr)
-        {
-            timeStr = timeStr.ToLower();
-
-            if (timeStr.Contains("час"))
-                return TimeUnit.Hour;
-            else if (timeStr.Contains("ден"))
-                return TimeUnit.Day;
-            else
-                return TimeUnit.None;
-        }
-
-        #endregion
-
-        #region Оставить в этом файле
-
-        private async Task<DetailedTimeSheetResponse> GetDetailedTimeSheetAsync(dynamic args, CancellationToken ct)
-        {
-            return await GetDetailedTimeSheetAsync(args.id);
-        }
-
-        private async Task<IEnumerable<SimpleTimeSheetResponse>> GetSimpleTimeSheetsAsync(dynamic args,
+        private async Task<DetailedTimeSheetResponse> GetDetailedTimeSheetHandlerAsync(dynamic args,
             CancellationToken ct)
         {
-            string callOffOrderId = Request.Query["callOffOrderId"];
-
-            IEnumerable<TimeSheet> result = null;
-
-            if (callOffOrderId == null)
-                result = await _timeSheetsBusinessLayer.GetTimeSheets();
-            else
-                result = await _timeSheetsBusinessLayer.GetTimeSheetsByCallOffOrderId(callOffOrderId);
-
-            return await GetSimpleTimeSheetsAsync(result);
+            return await _timeSheetsService.GetDetailedTimeSheetAsync(args.id);
         }
 
-        private async Task<DetailedTimeSheetResponse> CreateTimeSheetAsync(dynamic args, CancellationToken ct)
+        private async Task<IEnumerable<SimpleTimeSheetResponse>> GetSimpleTimeSheetsByCallOffOrderHandlerAsync(
+            dynamic args,
+            CancellationToken ct)
         {
-            CreateTimeSheetRequest request = this.Bind<CreateTimeSheetRequest>();
-
-            var validationResult = this.Validate(request);
-
-            if (!validationResult.IsValid)
-            { 
-                 throw new ValidationErrorException(validationResult.FormattedErrors);
-            }
-
-            CallOffOrder callOffOrder = await _callOffOrdersBusinessLayer.GetCallOffOrder(request.CallOffOrderId);
-            IEnumerable<TimeSheet> timeSheets =
-                await _timeSheetsBusinessLayer.GetTimeSheetsByCallOffOrderId(request.CallOffOrderId);
-
-            // FIXME: Изменить после преобразования из string в DateTime
-            DateTime startDate = DateTime.Parse(callOffOrder.StartDate).ToUniversalTime();
-
-            // FIXME: Изменить после преобразования из string в DateTime
-            DateTime finishDate = DateTime.Parse(callOffOrder.FinishDate).ToUniversalTime();
-
-
-            string timeSheetId = null;
-            bool created = false;
-            while (startDate < finishDate)
-            {
-                var tsExist =
-                    timeSheets.Where(
-                        ts =>
-                            (ts.Month == startDate.Month &&
-                             ts.Year == startDate.Year)).Any();
-
-                if (tsExist)
-                {
-                    startDate = startDate.AddMonths(1);
-                    continue;
-                }
-                else
-                {
-                    timeSheetId = await _timeSheetsBusinessLayer.CreateTimeSheet(request.CallOffOrderId,
-                        startDate.Month, startDate.Year);
-                    created = true;
-                    break;
-                }
-            }
-
-            if (!created)
-            {
-                timeSheetId = await _timeSheetsBusinessLayer.CreateTimeSheet(request.CallOffOrderId,
-                    finishDate.Month, finishDate.Year);
-            }
-
-            return await GetDetailedTimeSheetAsync(timeSheetId);
+            return await _timeSheetsService.GetTimeSheetsByCallOffOrderAsync(Request.Query["callOffOrderId"]);
         }
 
-        private async Task<Negotiator> UpdateSpentTimeAsync(dynamic args, CancellationToken ct)
+        private async Task<IEnumerable<SimpleTimeSheetResponse>> GetSimpleTimeSheetsHandlerAsync(dynamic args,
+            CancellationToken ct)
         {
-            var request = this.Bind<UpdateTimesRequest>(new BindingConfig {BodyOnly = true});
+            return await _timeSheetsService.GetTimeSheetsAsync();
+        }
+
+        private Task<DetailedTimeSheetResponse> CreateTimeSheetHandlerAsync(dynamic args, CancellationToken ct)
+        {
+            throw new NotImplementedException(); // Создание TS возможно только из сервиса Заявок на проверку
+        }
+
+        private async Task<Negotiator> UpdateSpentTimeHandlerAsync(dynamic args, CancellationToken ct)
+        {
+            UpdateSpentTimesRequest request = this.Bind<UpdateSpentTimesRequest>(new BindingConfig {BodyOnly = true});
 
             var validationResult = this.Validate(request);
 
@@ -255,88 +109,35 @@ namespace Cmas.Services.TimeSheets
                 throw new ValidationErrorException(validationResult.FormattedErrors);
             }
 
-            TimeSheet timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(args.id);
-
-            CallOffOrder callOffOrder = await _callOffOrdersBusinessLayer.GetCallOffOrder(timeSheet.CallOffOrderId);
-
-            timeSheet.SpentTime[request.Id] = request.SpentTime;
-
-            timeSheet.Amount = 0;
-            foreach (var rateId in timeSheet.SpentTime.Keys)
-            {
-                var spentTime = timeSheet.SpentTime[rateId];
-
-                Rate callOffOrderRate = callOffOrder.Rates.Where(r => r.Id.ToString() == rateId).SingleOrDefault();
-
-                if (callOffOrderRate == null)
-                    throw new ArgumentException("rate not found: " + rateId);
-
-                if (!callOffOrderRate.IsRate)
-                    throw new ArgumentException(String.Format("rate {0} is group", rateId));
-
-                timeSheet.Amount += TimeSheetsBusinessLayer.GetAmount(callOffOrderRate.Amount,
-                    ConvertToTimeUnit(callOffOrderRate.UnitName), spentTime);
-            }
-
-            await _timeSheetsBusinessLayer.UpdateTimeSheet(timeSheet);
+            await _timeSheetsService.UpdateSpentTimeAsync(args.id, request.Id, request.SpentTime);
 
             return Negotiate.WithStatusCode(HttpStatusCode.OK);
         }
 
-        private async Task<Negotiator> UpdateTimeSheetAsync(dynamic args, CancellationToken ct)
+        private async Task<Negotiator> UpdateTimeSheetHandlerAsync(dynamic args, CancellationToken ct)
         {
-            UpdateTimeSheetRequest request = this.Bind<UpdateTimeSheetRequest>();
+            UpdateTimeSheetRequest request = this.Bind<UpdateTimeSheetRequest>(new BindingConfig { BodyOnly = true });
 
-            TimeSheet timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(args.id);
+            var validationResult = this.Validate(request);
 
-            timeSheet.Notes = request.Notes;
-            timeSheet.Month = request.Month;
-            timeSheet.Year = request.Year;
+            if (!validationResult.IsValid)
+            {
+                throw new ValidationErrorException(validationResult.FormattedErrors);
+            }
 
-            await _timeSheetsBusinessLayer.UpdateTimeSheet(timeSheet);
+            await _timeSheetsService.UpdateTimeSheetAsync(args.id, request.Notes, request.Month, request.Year);
+
+            return Negotiate.WithStatusCode(HttpStatusCode.OK);
+        }
+
+        private async Task<Negotiator> UpdateAmountHandlerAsync(dynamic args, CancellationToken ct)
+        {
+          
+            await _timeSheetsService.UpdateAmountAsync(args.id);
 
             return Negotiate.WithStatusCode(HttpStatusCode.OK);
         }
 
         #endregion
-
-        public RequestsModule(ICommandBuilder commandBuilder, IQueryBuilder queryBuilder, IMapper autoMapper)
-            : base("/time-sheets")
-        {
-            _autoMapper = autoMapper;
-            _commandBuilder = commandBuilder;
-            _queryBuilder = queryBuilder;
-
-            _callOffOrdersBusinessLayer = new CallOffOrdersBusinessLayer(_commandBuilder, _queryBuilder);
-            _contractBusinessLayer = new ContractBusinessLayer(_commandBuilder, _queryBuilder);
-            _timeSheetsBusinessLayer = new TimeSheetsBusinessLayer(_commandBuilder, _queryBuilder);
-
-            /// <summary>
-            /// /time-sheets/ - получить список табелей
-            /// /time-sheets?callOffOrderId={id} - получить табели по указанному договору
-            /// </summary>
-            Get<IEnumerable<SimpleTimeSheetResponse>>("/", GetSimpleTimeSheetsAsync);
-
-            /// <summary>
-            /// /time-sheets/{id} - получить табель по указанному ID
-            /// </summary>
-            Get<DetailedTimeSheetResponse>("/{id}", GetDetailedTimeSheetAsync);
-
-            /// <summary>
-            /// Создать табель учета рабочего времени
-            /// </summary>
-            Post<DetailedTimeSheetResponse>("/", CreateTimeSheetAsync);
-
-            /// <summary>
-            /// Обновить отработанное время по работам
-            /// </summary>
-            Put<Negotiator>("/{id}/spent-time", UpdateSpentTimeAsync);
-
-            /// <summary>
-            /// Обновить табель
-            /// </summary>
-            Put<Negotiator>("/{id}", UpdateTimeSheetAsync);
-
-        }
     }
 }
