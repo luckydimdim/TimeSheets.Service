@@ -134,17 +134,16 @@ namespace Cmas.Services.TimeSheets
                     result.RateGroups.Add(timeSheetRateGroup);
                 }
 
-            DateTime startDate = DateTime.Parse(callOffOrder.StartDate).ToUniversalTime();
-            DateTime finishDate = DateTime.Parse(callOffOrder.FinishDate).ToUniversalTime();
+            DateTime startDate = DateTime.SpecifyKind(DateTime.Parse(callOffOrder.StartDate), DateTimeKind.Utc);
+            DateTime finishDate = DateTime.SpecifyKind(DateTime.Parse(callOffOrder.FinishDate), DateTimeKind.Utc);
 
             var lastTimeSheet = (await _timeSheetsBusinessLayer.GetTimeSheetsByCallOffOrderId(callOffOrder.Id))
-                .Where(t => t.Id != timeSheet.Id)
                 .OrderBy(t => t.Year)
                 .ThenBy(t => t.Month)
                 .LastOrDefault();
 
             if (lastTimeSheet != null)
-                startDate = new DateTime(lastTimeSheet.Year, lastTimeSheet.Month, 1).ToUniversalTime();
+                startDate = DateTime.SpecifyKind(new DateTime(lastTimeSheet.Year, lastTimeSheet.Month, 1), DateTimeKind.Utc);
 
 
             if (startDate.AddMonths(1) > finishDate)
