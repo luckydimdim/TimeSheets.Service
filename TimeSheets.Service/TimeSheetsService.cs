@@ -124,7 +124,7 @@ namespace Cmas.Services.TimeSheets
 
                     result.RateGroups.Add(timeSheetRateGroup);
                 }
-                else if (callOffOrderRate.IsRate && !callOffOrderRate.ParentId.HasValue)
+                else if (callOffOrderRate.IsRate && string.IsNullOrEmpty(callOffOrderRate.ParentId))
                 {
                     var timeSheetRateGroup = new RateGroupResponse();
 
