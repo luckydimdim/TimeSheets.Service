@@ -16,7 +16,12 @@ namespace Cmas.Services.TimeSheets.Dtos.Responses.Rate
         /// Наименование ставки
         /// </summary>
         public string Name;
-         
+
+        /// <summary>
+        /// Ед. изм
+        /// </summary>
+        public string UnitName;
+
         /// <summary>
         /// Потраченное время
         /// </summary>

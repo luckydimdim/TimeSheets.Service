@@ -34,6 +34,7 @@ namespace Cmas.Services.TimeSheets
 
             result.Name = callOffOrderRate.Name;
             result.Id = callOffOrderRate.Id.ToString();
+            result.UnitName = callOffOrderRate.UnitName;
 
             if (spentTime != null && spentTime.ContainsKey(rateId))
                 result.SpentTime = spentTime[rateId].ToList();
