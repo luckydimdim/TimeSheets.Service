@@ -135,29 +135,40 @@ namespace Cmas.Services.TimeSheets
                     result.RateGroups.Add(timeSheetRateGroup);
                 }
 
-            DateTime startDate = DateTime.SpecifyKind(DateTime.ParseExact(callOffOrder.StartDate, "dd.MM.yyyy", CultureInfo.InvariantCulture), DateTimeKind.Utc);
-            DateTime finishDate = DateTime.SpecifyKind(DateTime.ParseExact(callOffOrder.FinishDate, "dd.MM.yyyy", CultureInfo.InvariantCulture), DateTimeKind.Utc);
+            IEnumerable<TimeSheet> callOffTimeSheets =
+                await _timeSheetsBusinessLayer.GetTimeSheetsByCallOffOrderId(callOffOrder.Id);
 
-            var lastTimeSheet = (await _timeSheetsBusinessLayer.GetTimeSheetsByCallOffOrderId(callOffOrder.Id))
+            GetAvailablePeriods(callOffOrder,
+                callOffTimeSheets, out result.AvailablePeriodsFrom, out result.AvailablePeriodsTo);
+
+            result.StatusSysName = timeSheet.Status.ToString();
+            result.StatusName = TimeSheetsBusinessLayer.GetStatusName(timeSheet.Status);
+
+            return result;
+        }
+
+        void GetAvailablePeriods(CallOffOrder callOffOrder, IEnumerable<TimeSheet> timeSheets, out DateTime startDate,
+            out DateTime finishDate)
+        {
+            startDate = DateTime.SpecifyKind(
+                DateTime.ParseExact(callOffOrder.StartDate, "dd.MM.yyyy", CultureInfo.InvariantCulture),
+                DateTimeKind.Utc);
+            finishDate = DateTime.SpecifyKind(
+                DateTime.ParseExact(callOffOrder.FinishDate, "dd.MM.yyyy", CultureInfo.InvariantCulture),
+                DateTimeKind.Utc);
+
+            var lastTimeSheet = timeSheets
                 .OrderBy(t => t.Year)
                 .ThenBy(t => t.Month)
                 .LastOrDefault();
 
             if (lastTimeSheet != null)
-                startDate = DateTime.SpecifyKind(new DateTime(lastTimeSheet.Year, lastTimeSheet.Month, 1), DateTimeKind.Utc);
+                startDate = DateTime.SpecifyKind(new DateTime(lastTimeSheet.Year, lastTimeSheet.Month, 1),
+                    DateTimeKind.Utc);
 
 
             if (startDate.AddMonths(1) > finishDate)
                 startDate = startDate.AddMonths(1);
-            
-
-            result.AvailablePeriodsFrom = startDate;
-            result.AvailablePeriodsTo = finishDate;
-
-            result.StatusSysName = timeSheet.Status.ToString();
-            result.StatusName = TimeSheetsBusinessLayer.GetStatusName(timeSheet.Status);
-             
-            return result;
         }
 
         #endregion
