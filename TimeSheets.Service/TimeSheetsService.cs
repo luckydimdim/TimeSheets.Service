@@ -14,6 +14,7 @@ using Cmas.Infrastructure.ErrorHandler;
 using Cmas.Services.TimeSheets.Dtos.Responses;
 using Cmas.Services.TimeSheets.Dtos.Responses.AdditionalData;
 using Cmas.Services.TimeSheets.Dtos.Responses.Rate;
+using System.Globalization;
 
 namespace Cmas.Services.TimeSheets
 {
@@ -134,8 +135,8 @@ namespace Cmas.Services.TimeSheets
                     result.RateGroups.Add(timeSheetRateGroup);
                 }
 
-            DateTime startDate = DateTime.SpecifyKind(DateTime.Parse(callOffOrder.StartDate), DateTimeKind.Utc);
-            DateTime finishDate = DateTime.SpecifyKind(DateTime.Parse(callOffOrder.FinishDate), DateTimeKind.Utc);
+            DateTime startDate = DateTime.SpecifyKind(DateTime.ParseExact(callOffOrder.StartDate, "dd.MM.yyyy", CultureInfo.InvariantCulture), DateTimeKind.Utc);
+            DateTime finishDate = DateTime.SpecifyKind(DateTime.ParseExact(callOffOrder.FinishDate, "dd.MM.yyyy", CultureInfo.InvariantCulture), DateTimeKind.Utc);
 
             var lastTimeSheet = (await _timeSheetsBusinessLayer.GetTimeSheetsByCallOffOrderId(callOffOrder.Id))
                 .OrderBy(t => t.Year)
