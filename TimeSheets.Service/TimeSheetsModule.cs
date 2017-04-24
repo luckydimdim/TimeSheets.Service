@@ -72,7 +72,7 @@ namespace Cmas.Services.TimeSheets
             Put<Negotiator>("/{id}", UpdateTimeSheetHandlerAsync);
         }
 
-        #region Обрабочтики
+        #region Обработчики
 
         private async Task<DetailedTimeSheetResponse> GetDetailedTimeSheetHandlerAsync(dynamic args,
             CancellationToken ct)
