@@ -9,6 +9,7 @@ using Nancy.Validation;
 using System.Threading;
 using Nancy.Responses.Negotiation;
 using Cmas.Infrastructure.ErrorHandler;
+using Cmas.Infrastructure.Security;
 
 namespace Cmas.Services.TimeSheets
 {
@@ -18,6 +19,8 @@ namespace Cmas.Services.TimeSheets
 
         public RequestsModule(IServiceProvider serviceProvider) : base("/time-sheets")
         {
+            this.RequiresAuthentication();
+
             _timeSheetsService = new TimeSheetsService(serviceProvider);
 
             /// <summary>
