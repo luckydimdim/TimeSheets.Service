@@ -85,9 +85,9 @@ namespace Cmas.Services.TimeSheets.Dtos.Responses
         /// </summary>
         public string Notes;
          
-        public DateTime AvailablePeriodsFrom;
+        public DateTime? AvailablePeriodsFrom;
 
-        public DateTime AvailablePeriodsTo;
+        public DateTime? AvailablePeriodsTo;
 
         public DetailedTimeSheetResponse()
         {

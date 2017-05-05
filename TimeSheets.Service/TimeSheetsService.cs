@@ -147,15 +147,19 @@ namespace Cmas.Services.TimeSheets
             return result;
         }
 
-        void GetAvailablePeriods(CallOffOrder callOffOrder, IEnumerable<TimeSheet> timeSheets, out DateTime startDate,
-            out DateTime finishDate)
+        void GetAvailablePeriods(CallOffOrder callOffOrder, IEnumerable<TimeSheet> timeSheets, out DateTime? startDate,
+            out DateTime? finishDate)
         {
-            startDate = DateTime.SpecifyKind(
-                DateTime.ParseExact(callOffOrder.StartDate, "dd.MM.yyyy", CultureInfo.InvariantCulture),
-                DateTimeKind.Utc);
-            finishDate = DateTime.SpecifyKind(
-                DateTime.ParseExact(callOffOrder.FinishDate, "dd.MM.yyyy", CultureInfo.InvariantCulture),
-                DateTimeKind.Utc);
+
+            if (!callOffOrder.StartDate.HasValue || !callOffOrder.FinishDate.HasValue)
+            {
+                startDate = null;
+                finishDate = null;
+                return;
+            }
+
+            startDate = callOffOrder.StartDate;
+            finishDate = callOffOrder.FinishDate;
 
             var lastTimeSheet = timeSheets
                 .OrderBy(t => t.Year)
@@ -167,8 +171,8 @@ namespace Cmas.Services.TimeSheets
                     DateTimeKind.Utc);
 
 
-            if (startDate.AddMonths(1) > finishDate)
-                startDate = startDate.AddMonths(1);
+            if (startDate.Value.AddMonths(1) > finishDate)
+                startDate = startDate.Value.AddMonths(1);
         }
 
         #endregion

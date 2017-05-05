@@ -1,4 +1,6 @@
-﻿namespace Cmas.Services.TimeSheets.Dtos.Responses.AdditionalData
+﻿using System;
+
+namespace Cmas.Services.TimeSheets.Dtos.Responses.AdditionalData
 {
     public class SouthTambeyAdditionalDataResponse : BaseAdditionalDataResponse
     {
@@ -38,6 +40,6 @@
         /// <summary>
         /// Дата мобилизации
         /// </summary>
-        public string MobDate;
+        public DateTime? MobDate;
     }
 }
