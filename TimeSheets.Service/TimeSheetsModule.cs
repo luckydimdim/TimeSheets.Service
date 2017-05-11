@@ -15,13 +15,27 @@ namespace Cmas.Services.TimeSheets
 {
     public class RequestsModule : NancyModule
     {
-        private readonly TimeSheetsService _timeSheetsService;
+        private IServiceProvider _serviceProvider;
+
+        private TimeSheetsService timeSheetsService;
+
+        private TimeSheetsService _timeSheetsService
+        {
+            get
+            {
+                if (timeSheetsService == null)
+                    timeSheetsService = new TimeSheetsService(_serviceProvider, Context);
+
+                return timeSheetsService;
+            }
+        }
 
         public RequestsModule(IServiceProvider serviceProvider) : base("/time-sheets")
         {
             this.RequiresAuthentication();
+            _serviceProvider = serviceProvider;
 
-            _timeSheetsService = new TimeSheetsService(serviceProvider);
+            
 
             /// <summary>
             /// /time-sheets/ - получить список табелей
@@ -50,6 +64,11 @@ namespace Cmas.Services.TimeSheets
             /// Обновить отработанное время по работам
             /// </summary>
             Put<Negotiator>("/{id}/spent-time", UpdateSpentTimeHandlerAsync);
+
+            /// <summary>
+            /// Обновить статус табеля
+            /// </summary>
+            Put<Negotiator>("/{id}/status", UpdateStatusHandlerAsync);
 
             /// <summary>
             /// Пересчитать сумму по табелю
@@ -127,6 +146,24 @@ namespace Cmas.Services.TimeSheets
 
             return Negotiate.WithStatusCode(HttpStatusCode.OK);
         }
+
+        private async Task<Negotiator> UpdateStatusHandlerAsync(dynamic args, CancellationToken ct)
+        {
+            UpdateStatusRequest request = this.Bind<UpdateStatusRequest>(new BindingConfig { BodyOnly = true });
+
+            var validationResult = this.Validate(request);
+
+            if (!validationResult.IsValid)
+            {
+                throw new ValidationErrorException(validationResult.FormattedErrors);
+            }
+
+            await _timeSheetsService.UpdateStatusAsync(args.id, request.Status);
+
+            return Negotiate.WithStatusCode(HttpStatusCode.OK);
+        }
+
+        
 
         #endregion
     }

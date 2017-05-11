@@ -14,6 +14,10 @@ using Cmas.Services.TimeSheets.Dtos.Responses;
 using Cmas.Services.TimeSheets.Dtos.Responses.AdditionalData;
 using Cmas.Services.TimeSheets.Dtos.Responses.Rate;
 using System.Globalization;
+using Cmas.Infrastructure.ErrorHandler;
+using Nancy;
+using Cmas.BusinessLayers.Requests;
+using Cmas.BusinessLayers.Requests.Entities;
 
 namespace Cmas.Services.TimeSheets
 {
@@ -47,18 +51,17 @@ namespace Cmas.Services.TimeSheets
         private readonly CallOffOrdersBusinessLayer _callOffOrdersBusinessLayer;
         private readonly ContractsBusinessLayer _contractsBusinessLayer;
         private readonly TimeSheetsBusinessLayer _timeSheetsBusinessLayer;
+        private readonly RequestsBusinessLayer _requestsBusinessLayer;
         private readonly IMapper _autoMapper;
 
-        public TimeSheetsService(IServiceProvider serviceProvider)
-        {
-            var _commandBuilder = (ICommandBuilder) serviceProvider.GetService(typeof(ICommandBuilder));
-            var _queryBuilder = (IQueryBuilder) serviceProvider.GetService(typeof(IQueryBuilder));
-
+        public TimeSheetsService(IServiceProvider serviceProvider, NancyContext ctx)
+        { 
             _autoMapper = (IMapper) serviceProvider.GetService(typeof(IMapper));
 
-            _callOffOrdersBusinessLayer = new CallOffOrdersBusinessLayer(_commandBuilder, _queryBuilder);
-            _contractsBusinessLayer = new ContractsBusinessLayer(_commandBuilder, _queryBuilder);
-            _timeSheetsBusinessLayer = new TimeSheetsBusinessLayer(_commandBuilder, _queryBuilder);
+            _callOffOrdersBusinessLayer = new CallOffOrdersBusinessLayer(serviceProvider, ctx.CurrentUser);
+            _contractsBusinessLayer = new ContractsBusinessLayer(serviceProvider, ctx.CurrentUser);
+            _timeSheetsBusinessLayer = new TimeSheetsBusinessLayer(serviceProvider, ctx.CurrentUser);
+            _requestsBusinessLayer = new RequestsBusinessLayer(serviceProvider, ctx.CurrentUser);
         }
 
         #region GetDetailedTimeSheet
@@ -200,6 +203,43 @@ namespace Cmas.Services.TimeSheets
             timeSheet.Amount = GetAmount(timeSheet, callOffOrder);
 
             await _timeSheetsBusinessLayer.UpdateTimeSheet(timeSheet);
+        }
+
+        public async Task UpdateStatusAsync(string timeSheetId, TimeSheetStatus status)
+        {
+            if (status == TimeSheetStatus.None)
+                throw new ArgumentException("status");
+
+            var timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(timeSheetId);
+             
+            await _timeSheetsBusinessLayer.UpdateTimeSheetStatus(timeSheet, status);
+
+            // TODO: переделать под событийную модель (с шиной)
+            await UpdateRequestStatusAsync(timeSheet.RequestId);
+
+        }
+
+        private async Task UpdateRequestStatusAsync(string requestId)
+        {
+            var timeSheets = await _timeSheetsBusinessLayer.GetTimeSheetsByRequestId(requestId);
+            var request = await _requestsBusinessLayer.GetRequest(requestId);
+             
+            if (timeSheets.Count() == timeSheets.Where(t => t.Status == TimeSheetStatus.Created).Count())
+            {
+                await _requestsBusinessLayer.UpdateRequestStatusAsync(request, RequestStatus.Created);
+            }
+            else if (timeSheets.Where(t => t.Status == TimeSheetStatus.Creating || t.Status == TimeSheetStatus.Created).Any())
+            {
+                await _requestsBusinessLayer.UpdateRequestStatusAsync(request, RequestStatus.Creating);
+            }
+            else if (timeSheets.Count() == timeSheets.Where(t => t.Status == TimeSheetStatus.Corrected || t.Status == TimeSheetStatus.Approved).Count() && timeSheets.Any(t => t.Status == TimeSheetStatus.Corrected))
+            {
+                await _requestsBusinessLayer.UpdateRequestStatusAsync(request, RequestStatus.Corrected);
+            }
+
+
+                    
+
         }
 
         public async Task UpdateAmountAsync(string timeSheetId)
