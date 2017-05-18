@@ -54,9 +54,9 @@ namespace Cmas.Services.TimeSheets.Dtos.Responses
         public double Amount;
 
         /// <summary>
-        /// TODO: Валюта
+        /// Валюта
         /// </summary>
-
+        public string CurrencySysName;
 
         /// <summary>
         ///  Системное имя статуса

@@ -236,10 +236,7 @@ namespace Cmas.Services.TimeSheets
             {
                 await _requestsBusinessLayer.UpdateRequestStatusAsync(request, RequestStatus.Corrected);
             }
-
-
-                    
-
+             
         }
 
         public async Task UpdateAmountAsync(string timeSheetId)
