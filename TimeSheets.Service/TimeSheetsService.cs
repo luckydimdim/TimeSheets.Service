@@ -2,8 +2,6 @@
 using Cmas.BusinessLayers.CallOffOrders;
 using Cmas.BusinessLayers.Contracts;
 using Cmas.BusinessLayers.TimeSheets;
-using Cmas.Infrastructure.Domain.Commands;
-using Cmas.Infrastructure.Domain.Queries;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -13,11 +11,10 @@ using Cmas.BusinessLayers.TimeSheets.Entities;
 using Cmas.Services.TimeSheets.Dtos.Responses;
 using Cmas.Services.TimeSheets.Dtos.Responses.AdditionalData;
 using Cmas.Services.TimeSheets.Dtos.Responses.Rate;
-using System.Globalization;
-using Cmas.Infrastructure.ErrorHandler;
 using Nancy;
 using Cmas.BusinessLayers.Requests;
 using Cmas.BusinessLayers.Requests.Entities;
+using Cmas.Infrastructure.ErrorHandler;
 
 namespace Cmas.Services.TimeSheets
 {
@@ -65,7 +62,6 @@ namespace Cmas.Services.TimeSheets
         }
 
         #region GetDetailedTimeSheet
-
         public async Task<DetailedTimeSheetResponse> GetDetailedTimeSheetAsync(string timeSheetId)
         {
             var timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(timeSheetId);
@@ -196,6 +192,11 @@ namespace Cmas.Services.TimeSheets
         {
             var timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(timeSheetId);
 
+            if (timeSheet == null)
+            {
+                throw new NotFoundErrorException();
+            }
+
             var callOffOrder = await _callOffOrdersBusinessLayer.GetCallOffOrder(timeSheet.CallOffOrderId);
 
             timeSheet.SpentTime[rateId] = spentTime;
@@ -211,7 +212,12 @@ namespace Cmas.Services.TimeSheets
                 throw new ArgumentException("status");
 
             var timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(timeSheetId);
-             
+
+            if (timeSheet == null)
+            {
+                throw new NotFoundErrorException();
+            }
+
             await _timeSheetsBusinessLayer.UpdateTimeSheetStatus(timeSheet, status);
 
             // TODO: переделать под событийную модель (с шиной)
@@ -336,8 +342,7 @@ namespace Cmas.Services.TimeSheets
         private IEnumerable<string> Validate(TimeSheet timeSheet, CallOffOrder callOffOrder)
         {
             var result = new List<string>();
-
-
+             
             var containsFilledRate = false;
 
             foreach (var kvp in timeSheet.SpentTime)
@@ -363,15 +368,14 @@ namespace Cmas.Services.TimeSheets
                 {
                     case TimeUnit.Day:
                         if (kvp.Value.Where(v => v > 1).Any())
-                            result.Add(string.Format("'{0}' содержит значения больше 1", callOffRate.Name));
+                            result.Add($"'{callOffRate.Name}' содержит значения больше 1");
                         break;
                     case TimeUnit.Hour:
                         if (kvp.Value.Where(v => v > 24).Any())
-                            result.Add(string.Format("'{0}' содержит значения больше 24", callOffRate.Name));
+                            result.Add($"'{callOffRate.Name}' содержит значения больше 24");
                         break;
                     default:
-                        throw new Exception(string.Format("Неизвестный тип ставки callOffRate.UnitName  {0}",
-                            callOffRate.UnitName));
+                        throw new Exception($"Неизвестный тип ставки callOffRate.UnitName  {callOffRate.UnitName}");
                 }
             }
 
