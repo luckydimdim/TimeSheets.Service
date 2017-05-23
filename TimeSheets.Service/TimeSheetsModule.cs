@@ -134,7 +134,7 @@ namespace Cmas.Services.TimeSheets
                 throw new ValidationErrorException(validationResult.FormattedErrors);
             }
 
-            await _timeSheetsService.UpdateTimeSheetAsync(args.id, request.Notes, request.Month, request.Year);
+            await _timeSheetsService.UpdateTimeSheetAsync(args.id, request.Notes, request.From, request.Till);
 
             return Negotiate.WithStatusCode(HttpStatusCode.OK);
         }

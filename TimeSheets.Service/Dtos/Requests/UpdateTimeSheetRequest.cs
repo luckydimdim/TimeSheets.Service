@@ -1,11 +1,22 @@
-﻿namespace Cmas.Services.TimeSheets.Dtos.Requests
+﻿using System;
+
+namespace Cmas.Services.TimeSheets.Dtos.Requests
 {
     public class UpdateTimeSheetRequest
     {
-        public int Month;
+        /// <summary>
+        /// Период табеля - начало
+        /// </summary>
+        public DateTime From;
 
-        public int Year;
+        /// <summary>
+        /// Период табеля - окончание
+        /// </summary>
+        public DateTime Till;
 
+        /// <summary>
+        /// Примечания
+        /// </summary>
         public string Notes;
     }
 }

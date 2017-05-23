@@ -24,14 +24,24 @@ namespace Cmas.Services.TimeSheets.Dtos.Responses
         public string CallOffOrderId;
 
         /// <summary>
-        /// Месяц
+        /// Период - начало
         /// </summary>
-        public int? Month;
+        public DateTime From;
 
         /// <summary>
-        /// Год
+        /// Период - окончание
         /// </summary>
-        public int? Year;
+        public DateTime Till;
+
+        /// <summary>
+        /// Наряд заказ - начало
+        /// </summary>
+        public DateTime CallOffOrderStartDate;
+
+        /// <summary>
+        /// Наряд заказ - окончание
+        /// </summary>
+        public DateTime CallOffOrderFinishDate;
 
         /// <summary>
         /// Дата и время создания
@@ -67,8 +77,7 @@ namespace Cmas.Services.TimeSheets.Dtos.Responses
         ///  Наименованеи статуса
         /// </summary> 
         public string StatusName;
-
-
+         
         /// <summary>
         /// Ставки/группы ставок и потраченное время
         /// </summary>

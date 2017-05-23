@@ -136,42 +136,15 @@ namespace Cmas.Services.TimeSheets
 
             IEnumerable<TimeSheet> callOffTimeSheets =
                 await _timeSheetsBusinessLayer.GetTimeSheetsByCallOffOrderId(callOffOrder.Id);
-
-            GetAvailablePeriods(callOffOrder,
-                callOffTimeSheets, out result.AvailablePeriodsFrom, out result.AvailablePeriodsTo);
-
+          
             result.StatusSysName = timeSheet.Status.ToString();
             result.StatusName = TimeSheetsBusinessLayer.GetStatusName(timeSheet.Status);
 
+            result.CallOffOrderStartDate = callOffOrder.StartDate.Value;
+            result.CallOffOrderFinishDate = callOffOrder.FinishDate.Value;
+
+
             return result;
-        }
-
-        void GetAvailablePeriods(CallOffOrder callOffOrder, IEnumerable<TimeSheet> timeSheets, out DateTime? startDate,
-            out DateTime? finishDate)
-        {
-
-            if (!callOffOrder.StartDate.HasValue || !callOffOrder.FinishDate.HasValue)
-            {
-                startDate = null;
-                finishDate = null;
-                return;
-            }
-
-            startDate = callOffOrder.StartDate;
-            finishDate = callOffOrder.FinishDate;
-
-            var lastTimeSheet = timeSheets
-                .OrderBy(t => t.Year)
-                .ThenBy(t => t.Month)
-                .LastOrDefault();
-
-            if (lastTimeSheet != null)
-                startDate = DateTime.SpecifyKind(new DateTime(lastTimeSheet.Year, lastTimeSheet.Month, 1),
-                    DateTimeKind.Utc);
-
-
-            if (startDate.Value.AddMonths(1) > finishDate)
-                startDate = startDate.Value.AddMonths(1);
         }
 
         #endregion
@@ -280,13 +253,34 @@ namespace Cmas.Services.TimeSheets
             return result;
         }
 
-        public async Task UpdateTimeSheetAsync(string timeSheetId, string notes, int month, int year)
+        /// <summary>
+        /// Обновить табель
+        /// </summary>
+        /// <param name="timeSheetId">ID табеля</param>
+        /// <param name="notes">Примечания</param>
+        /// <param name="month"></param>
+        /// <param name="year"></param>
+        /// <returns></returns>
+        public async Task UpdateTimeSheetAsync(string timeSheetId, string notes, DateTime from, DateTime till)
         {
-            var timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(timeSheetId);
+            TimeSheet timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(timeSheetId);
+
+            if (timeSheet == null)
+            {
+                throw new NotFoundErrorException();
+            }
 
             timeSheet.Notes = notes;
-            timeSheet.Month = month;
-            timeSheet.Year = year;
+             
+            // сбрасываем работы
+            if (timeSheet.From != from || timeSheet.Till != till)
+            {
+                timeSheet.SpentTime = new Dictionary<string, IEnumerable<double>>();
+                timeSheet.Amount = 0;
+            }
+             
+            timeSheet.From = from;
+            timeSheet.Till = till;
 
             await _timeSheetsBusinessLayer.UpdateTimeSheet(timeSheet);
         }
