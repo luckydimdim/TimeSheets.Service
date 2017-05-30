@@ -32,7 +32,7 @@ namespace Cmas.Services.TimeSheets
 
         public RequestsModule(IServiceProvider serviceProvider) : base("/time-sheets")
         {
-            this.RequiresAuthentication();
+            this.RequiresRoles(new[] { Role.Contractor, Role.Customer });
             _serviceProvider = serviceProvider;
 
             
