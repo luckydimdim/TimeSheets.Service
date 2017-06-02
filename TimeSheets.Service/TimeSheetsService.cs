@@ -140,8 +140,8 @@ namespace Cmas.Services.TimeSheets
             result.StatusSysName = timeSheet.Status.ToString();
             result.StatusName = TimeSheetsBusinessLayer.GetStatusName(timeSheet.Status);
 
-            result.CallOffOrderStartDate = callOffOrder.StartDate.Value;
-            result.CallOffOrderFinishDate = callOffOrder.FinishDate.Value;
+            result.CallOffOrderStartDate = callOffOrder.StartDate;
+            result.CallOffOrderFinishDate = callOffOrder.FinishDate;
 
 
             return result;
