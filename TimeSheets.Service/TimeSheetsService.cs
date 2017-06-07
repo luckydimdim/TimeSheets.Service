@@ -15,6 +15,7 @@ using Nancy;
 using Cmas.BusinessLayers.Requests;
 using Cmas.BusinessLayers.Requests.Entities;
 using Cmas.Infrastructure.ErrorHandler;
+using System.IO;
 
 namespace Cmas.Services.TimeSheets
 {
@@ -52,7 +53,7 @@ namespace Cmas.Services.TimeSheets
         private readonly IMapper _autoMapper;
 
         public TimeSheetsService(IServiceProvider serviceProvider, NancyContext ctx)
-        { 
+        {
             _autoMapper = (IMapper) serviceProvider.GetService(typeof(IMapper));
 
             _callOffOrdersBusinessLayer = new CallOffOrdersBusinessLayer(serviceProvider, ctx.CurrentUser);
@@ -62,6 +63,7 @@ namespace Cmas.Services.TimeSheets
         }
 
         #region GetDetailedTimeSheet
+
         public async Task<DetailedTimeSheetResponse> GetDetailedTimeSheetAsync(string timeSheetId)
         {
             var timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(timeSheetId);
@@ -136,7 +138,7 @@ namespace Cmas.Services.TimeSheets
 
             IEnumerable<TimeSheet> callOffTimeSheets =
                 await _timeSheetsBusinessLayer.GetTimeSheetsByCallOffOrderId(callOffOrder.Id);
-          
+
             result.StatusSysName = timeSheet.Status.ToString();
             result.StatusName = TimeSheetsBusinessLayer.GetStatusName(timeSheet.Status);
 
@@ -195,27 +197,28 @@ namespace Cmas.Services.TimeSheets
 
             // TODO: переделать под событийную модель (с шиной)
             await UpdateRequestStatusAsync(timeSheet.RequestId);
-
         }
 
         private async Task UpdateRequestStatusAsync(string requestId)
         {
             var timeSheets = await _timeSheetsBusinessLayer.GetTimeSheetsByRequestId(requestId);
             var request = await _requestsBusinessLayer.GetRequest(requestId);
-             
+
             if (timeSheets.Count() == timeSheets.Where(t => t.Status == TimeSheetStatus.Created).Count())
             {
                 await _requestsBusinessLayer.UpdateRequestStatusAsync(request, RequestStatus.Created);
             }
-            else if (timeSheets.Where(t => t.Status == TimeSheetStatus.Creating || t.Status == TimeSheetStatus.Created).Any())
+            else if (timeSheets.Where(t => t.Status == TimeSheetStatus.Creating || t.Status == TimeSheetStatus.Created)
+                .Any())
             {
                 await _requestsBusinessLayer.UpdateRequestStatusAsync(request, RequestStatus.Creating);
             }
-            else if (timeSheets.Count() == timeSheets.Where(t => t.Status == TimeSheetStatus.Corrected || t.Status == TimeSheetStatus.Approved).Count() && timeSheets.Any(t => t.Status == TimeSheetStatus.Corrected))
+            else if (timeSheets.Count() == timeSheets
+                         .Where(t => t.Status == TimeSheetStatus.Corrected || t.Status == TimeSheetStatus.Approved)
+                         .Count() && timeSheets.Any(t => t.Status == TimeSheetStatus.Corrected))
             {
                 await _requestsBusinessLayer.UpdateRequestStatusAsync(request, RequestStatus.Corrected);
             }
-             
         }
 
         public async Task UpdateAmountAsync(string timeSheetId)
@@ -271,14 +274,14 @@ namespace Cmas.Services.TimeSheets
             }
 
             timeSheet.Notes = notes;
-             
+
             // сбрасываем работы
             if (timeSheet.From != from || timeSheet.Till != till)
             {
                 timeSheet.SpentTime = new Dictionary<string, IEnumerable<double>>();
                 timeSheet.Amount = 0;
             }
-             
+
             timeSheet.From = from;
             timeSheet.Till = till;
 
@@ -336,7 +339,7 @@ namespace Cmas.Services.TimeSheets
         private IEnumerable<string> Validate(TimeSheet timeSheet, CallOffOrder callOffOrder)
         {
             var result = new List<string>();
-             
+
             var containsFilledRate = false;
 
             foreach (var kvp in timeSheet.SpentTime)
@@ -382,6 +385,88 @@ namespace Cmas.Services.TimeSheets
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Добавить вложение
+        /// </summary>
+        public async Task<FileUploadResponse> AddAttachmentAsync(string timeSheetId, string fileName, Stream stream,
+            string contentType)
+        {
+            var timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(timeSheetId);
+
+            if (timeSheet == null)
+            {
+                throw new NotFoundErrorException();
+            }
+
+            if (timeSheet.Attachments.ContainsKey(fileName))
+            {
+                throw new InvalidOperationException("attachment with this name already exists");
+            }
+
+            var result = new FileUploadResponse();
+
+            result.Identifier = await _timeSheetsBusinessLayer.AddAttachment(timeSheet, fileName, stream, contentType);
+
+            return result;
+        }
+
+        /// <summary>
+        /// Удалить вложение
+        /// </summary>
+        public async Task DeleteAttachmentAsync(string timeSheetId, string fileName)
+        {
+            var timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(timeSheetId);
+
+            if (timeSheet == null)
+            {
+                throw new NotFoundErrorException();
+            }
+
+            if (!timeSheet.Attachments.ContainsKey(fileName))
+            {
+                throw new InvalidOperationException("attachment with this name not exists");
+            }
+
+            await _timeSheetsBusinessLayer.DeleteAttachmentAsync(timeSheet, fileName);
+        }
+
+        /// <summary>
+        /// Получить вложение
+        /// </summary>
+        public async Task<Attachment> GetAttachmentAsync(string timeSheetId, string fileName)
+        {
+            var timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(timeSheetId);
+
+            if (timeSheet == null)
+            {
+                throw new NotFoundErrorException();
+            }
+
+            if (!timeSheet.Attachments.ContainsKey(fileName))
+            {
+                throw new InvalidOperationException("attachment with this name not exists");
+            }
+
+            return await _timeSheetsBusinessLayer.GetAttachmentAsync(timeSheet, fileName);
+        }
+
+        /// <summary>
+        /// Получить вложения (без данных)
+        /// </summary>
+        public async Task<AttachmentResponse[]> GetAttachmentsAsync(string timeSheetId)
+        {
+            var result = new List<AttachmentResponse>();
+
+            var attachments = await _timeSheetsBusinessLayer.GetAttachmentsAsync(timeSheetId);
+
+            foreach (var attachment in attachments)
+            {
+                result.Add(_autoMapper.Map<AttachmentResponse>(attachment));
+            }
+
+            return result.ToArray();
         }
     }
 }

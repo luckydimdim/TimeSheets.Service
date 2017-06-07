@@ -10,6 +10,7 @@ namespace Cmas.Services.TimeSheets
         {
             CreateMap<TimeSheet, DetailedTimeSheetResponse>();
             CreateMap<TimeSheet, SimpleTimeSheetResponse>();
+            CreateMap<Attachment, AttachmentResponse>();
         }
     }
 
