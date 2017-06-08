@@ -20,7 +20,7 @@ namespace Cmas.Services.TimeSheets.Dtos.Responses.Rate
         /// <summary>
         /// Ед. изм
         /// </summary>
-        public string UnitName;
+        public int Unit;
 
         /// <summary>
         /// Потраченное время

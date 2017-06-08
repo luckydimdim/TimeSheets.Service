@@ -16,6 +16,7 @@ using Cmas.BusinessLayers.Requests;
 using Cmas.BusinessLayers.Requests.Entities;
 using Cmas.Infrastructure.ErrorHandler;
 using System.IO;
+using Microsoft.Extensions.Logging;
 
 namespace Cmas.Services.TimeSheets
 {
@@ -35,7 +36,7 @@ namespace Cmas.Services.TimeSheets
 
             result.Name = callOffOrderRate.Name;
             result.Id = callOffOrderRate.Id.ToString();
-            result.UnitName = callOffOrderRate.UnitName;
+            result.Unit = (int)callOffOrderRate.Unit;
 
             if (spentTime != null && spentTime.ContainsKey(rateId))
                 result.SpentTime = spentTime[rateId].ToList();
@@ -51,10 +52,13 @@ namespace Cmas.Services.TimeSheets
         private readonly TimeSheetsBusinessLayer _timeSheetsBusinessLayer;
         private readonly RequestsBusinessLayer _requestsBusinessLayer;
         private readonly IMapper _autoMapper;
+        private ILogger _logger;
 
         public TimeSheetsService(IServiceProvider serviceProvider, NancyContext ctx)
         {
             _autoMapper = (IMapper) serviceProvider.GetService(typeof(IMapper));
+            var _loggerFactory = (ILoggerFactory)serviceProvider.GetService(typeof(ILoggerFactory));
+            _logger = _loggerFactory.CreateLogger<TimeSheetsService>();
 
             _callOffOrdersBusinessLayer = new CallOffOrdersBusinessLayer(serviceProvider, ctx.CurrentUser);
             _contractsBusinessLayer = new ContractsBusinessLayer(serviceProvider, ctx.CurrentUser);
@@ -151,17 +155,6 @@ namespace Cmas.Services.TimeSheets
 
         #endregion
 
-        private TimeUnit ConvertToTimeUnit(string timeStr)
-        {
-            timeStr = timeStr.ToLower();
-
-            if (timeStr.Contains("час"))
-                return TimeUnit.Hour;
-            else if (timeStr.Contains("ден"))
-                return TimeUnit.Day;
-            else
-                return TimeUnit.None;
-        }
 
         public async Task UpdateSpentTimeAsync(string timeSheetId, string rateId, IEnumerable<double> spentTime)
         {
@@ -249,8 +242,16 @@ namespace Cmas.Services.TimeSheets
                 if (!callOffOrderRate.IsRate)
                     throw new ArgumentException(string.Format("rate {0} is group", timeSheetRateId));
 
-                result += TimeSheetsBusinessLayer.GetAmount(callOffOrderRate.Amount,
-                    ConvertToTimeUnit(callOffOrderRate.UnitName), timeSheetSpantTime);
+                if (callOffOrderRate.Unit == RateUnit.Day)
+                    result += TimeSheetsBusinessLayer.GetDayAmount(callOffOrderRate.Amount, timeSheetSpantTime);
+                else if (callOffOrderRate.Unit == RateUnit.Hour)
+                    result += TimeSheetsBusinessLayer.GetHourAmount(callOffOrderRate.Amount, timeSheetSpantTime);
+                else if (callOffOrderRate.Unit == RateUnit.Month)
+                    result += TimeSheetsBusinessLayer.GetMonthAmount(callOffOrderRate.Amount, timeSheetSpantTime, timeSheet.From, timeSheet.Till);
+                else
+                {
+                    _logger.LogWarning($"Unknown rate {callOffOrderRate.Unit}");
+                }
             }
 
             return result;
@@ -358,21 +359,19 @@ namespace Cmas.Services.TimeSheets
                     throw new Exception(string.Format("Ставка с id {0} не найдена в наряд заказе с id {1}", rateId,
                         callOffOrder.Id));
 
-
-                var timeUnit = ConvertToTimeUnit(callOffRate.UnitName);
-
-                switch (timeUnit)
+                 
+                switch (callOffRate.Unit)
                 {
-                    case TimeUnit.Day:
+                    case RateUnit.Day:
                         if (kvp.Value.Where(v => v > 1).Any())
                             result.Add($"'{callOffRate.Name}' содержит значения больше 1");
                         break;
-                    case TimeUnit.Hour:
+                    case RateUnit.Hour:
                         if (kvp.Value.Where(v => v > 24).Any())
                             result.Add($"'{callOffRate.Name}' содержит значения больше 24");
                         break;
                     default:
-                        throw new Exception($"Неизвестный тип ставки callOffRate.UnitName  {callOffRate.UnitName}");
+                        throw new Exception($"Неизвестный тип ставки callOffRate.Unit  {callOffRate.Unit}");
                 }
             }
 
