@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using Cmas.BusinessLayers.TimeSheets.Entities;
 using Cmas.Services.TimeSheets.Dtos.Responses.Rate;
 using Cmas.Services.TimeSheets.Dtos.Responses.AdditionalData;
 using Newtonsoft.Json;
@@ -93,10 +94,11 @@ namespace Cmas.Services.TimeSheets.Dtos.Responses
         /// Примечания
         /// </summary>
         public string Notes;
-         
-        public DateTime? AvailablePeriodsFrom;
 
-        public DateTime? AvailablePeriodsTo;
+        /// <summary>
+        /// Доступные периоды для табеля
+        /// </summary>
+        public IEnumerable<DateRange> AvailablePeriods;
 
         public DetailedTimeSheetResponse()
         {

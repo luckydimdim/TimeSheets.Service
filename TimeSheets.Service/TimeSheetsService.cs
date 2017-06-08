@@ -149,6 +149,7 @@ namespace Cmas.Services.TimeSheets
             result.CallOffOrderStartDate = callOffOrder.StartDate;
             result.CallOffOrderFinishDate = callOffOrder.FinishDate;
 
+            result.AvailablePeriods = await _timeSheetsBusinessLayer.GetAvailableRanges(timeSheet.Id, callOffOrder.Id, callOffOrder.StartDate, callOffOrder.FinishDate);
 
             return result;
         }
