@@ -113,7 +113,8 @@ namespace Cmas.Services.TimeSheets
         private async Task<string> CreateTempAttachmentTokenHandlerAsync(dynamic args,
             CancellationToken ct)
         {
-            return await _timeSheetsService.CreateTempAttachmentTokenAsync((string) args.id, (string) args.fileName);
+            string fileName = Uri.EscapeDataString((string)args.fileName);
+            return await _timeSheetsService.CreateTempAttachmentTokenAsync((string) args.id, fileName);
         }
 
         private async Task<AttachmentResponse[]> GetAttachmentsHandlerAsync(dynamic args,
@@ -126,20 +127,20 @@ namespace Cmas.Services.TimeSheets
             CancellationToken ct)
         {
             string token = Request.Query["token"];
+            string fileName = Uri.EscapeDataString((string)args.fileName);
 
-            Attachment attachment = await _timeSheetsService.GetAttachmentAsync((string) args.id, args.fileName, token);
+            Attachment attachment = await _timeSheetsService.GetAttachmentAsync((string) args.id, fileName, token);
 
             var response = new StreamResponse(() => new MemoryStream(attachment.Data), attachment.Content_type);
-
-            var fileName = Uri.EscapeDataString((string) args.fileName);
-
             return response .AsAttachment(fileName, contentType: attachment.Content_type);
         }
 
         private async Task<Negotiator> DeleteAttachmentHandlerAsync(dynamic args,
             CancellationToken ct)
         {
-            await _timeSheetsService.DeleteAttachmentAsync((string) args.id, (string) args.fileName);
+
+            string fileName = Uri.EscapeDataString((string) args.fileName);
+            await _timeSheetsService.DeleteAttachmentAsync((string) args.id, fileName);
 
             return Negotiate.WithStatusCode(HttpStatusCode.OK);
         }
