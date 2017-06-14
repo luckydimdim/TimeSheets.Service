@@ -35,7 +35,7 @@ namespace Cmas.Services.TimeSheets
 
         public RequestsModule(IServiceProvider serviceProvider) : base("/time-sheets")
         {
-            this.RequiresAnyRole(new[] {Role.Contractor, Role.Customer});
+            this.RequiresAnyRole(new[] {Role.Contractor, Role.Customer}, except: new[] { "download-attachment" });
             _serviceProvider = serviceProvider;
 
 
@@ -95,7 +95,12 @@ namespace Cmas.Services.TimeSheets
             /// <summary>
             /// Получить вложение
             /// </summary>
-            Get<Response>("/{id}/attachment/{fileName}", GetAttachmentHandlerAsync);
+            Get<Response>("/{id}/attachment/{fileName}", GetAttachmentHandlerAsync, name: "download-attachment");
+
+            /// <summary>
+            /// Сгенерировать временный токен для скачки файла
+            /// </summary>
+            Post<string>("/{id}/attachment-token/{fileName}", CreateTempAttachmentTokenHandlerAsync);
 
             /// <summary>
             /// Получить вложения (без данных)
@@ -105,26 +110,36 @@ namespace Cmas.Services.TimeSheets
 
         #region Обработчики
 
+        private async Task<string> CreateTempAttachmentTokenHandlerAsync(dynamic args,
+            CancellationToken ct)
+        {
+            return await _timeSheetsService.CreateTempAttachmentTokenAsync((string) args.id, (string) args.fileName);
+        }
+
         private async Task<AttachmentResponse[]> GetAttachmentsHandlerAsync(dynamic args,
             CancellationToken ct)
         {
-           return await _timeSheetsService.GetAttachmentsAsync((string)args.id);
+            return await _timeSheetsService.GetAttachmentsAsync((string) args.id);
         }
 
         private async Task<Response> GetAttachmentHandlerAsync(dynamic args,
             CancellationToken ct)
         {
-            Attachment attachment = await _timeSheetsService.GetAttachmentAsync((string) args.id, args.fileName);
+            string token = Request.Query["token"];
+
+            Attachment attachment = await _timeSheetsService.GetAttachmentAsync((string) args.id, args.fileName, token);
 
             var response = new StreamResponse(() => new MemoryStream(attachment.Data), attachment.Content_type);
 
-            return response/*.AsAttachment((string) args.fileName, contentType: attachment.Content_type)*/;
+            var fileName = Uri.EscapeDataString((string) args.fileName);
+
+            return response .AsAttachment(fileName, contentType: attachment.Content_type);
         }
 
         private async Task<Negotiator> DeleteAttachmentHandlerAsync(dynamic args,
             CancellationToken ct)
         {
-            await _timeSheetsService.DeleteAttachmentAsync((string) args.id, (string)args.fileName);
+            await _timeSheetsService.DeleteAttachmentAsync((string) args.id, (string) args.fileName);
 
             return Negotiate.WithStatusCode(HttpStatusCode.OK);
         }
@@ -133,7 +148,7 @@ namespace Cmas.Services.TimeSheets
             CancellationToken ct)
         {
             var request = this.Bind<FileUploadRequest>();
-             
+
             return await _timeSheetsService.AddAttachmentAsync((string) args.id, request.File.Name, request.File.Value,
                 request.File.ContentType);
         }

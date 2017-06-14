@@ -36,7 +36,7 @@ namespace Cmas.Services.TimeSheets
 
             result.Name = callOffOrderRate.Name;
             result.Id = callOffOrderRate.Id.ToString();
-            result.Unit = (int)callOffOrderRate.Unit;
+            result.Unit = (int) callOffOrderRate.Unit;
 
             if (spentTime != null && spentTime.ContainsKey(rateId))
                 result.SpentTime = spentTime[rateId].ToList();
@@ -57,7 +57,7 @@ namespace Cmas.Services.TimeSheets
         public TimeSheetsService(IServiceProvider serviceProvider, NancyContext ctx)
         {
             _autoMapper = (IMapper) serviceProvider.GetService(typeof(IMapper));
-            var _loggerFactory = (ILoggerFactory)serviceProvider.GetService(typeof(ILoggerFactory));
+            var _loggerFactory = (ILoggerFactory) serviceProvider.GetService(typeof(ILoggerFactory));
             _logger = _loggerFactory.CreateLogger<TimeSheetsService>();
 
             _callOffOrdersBusinessLayer = new CallOffOrdersBusinessLayer(serviceProvider, ctx.CurrentUser);
@@ -149,7 +149,8 @@ namespace Cmas.Services.TimeSheets
             result.CallOffOrderStartDate = callOffOrder.StartDate;
             result.CallOffOrderFinishDate = callOffOrder.FinishDate;
 
-            result.AvailablePeriods = await _timeSheetsBusinessLayer.GetAvailableRanges(timeSheet.Id, callOffOrder.Id, callOffOrder.StartDate, callOffOrder.FinishDate);
+            result.AvailablePeriods = await _timeSheetsBusinessLayer.GetAvailableRanges(timeSheet.Id, callOffOrder.Id,
+                callOffOrder.StartDate, callOffOrder.FinishDate);
 
             return result;
         }
@@ -248,7 +249,8 @@ namespace Cmas.Services.TimeSheets
                 else if (callOffOrderRate.Unit == RateUnit.Hour)
                     result += TimeSheetsBusinessLayer.GetHourAmount(callOffOrderRate.Amount, timeSheetSpantTime);
                 else if (callOffOrderRate.Unit == RateUnit.Month)
-                    result += TimeSheetsBusinessLayer.GetMonthAmount(callOffOrderRate.Amount, timeSheetSpantTime, timeSheet.From, timeSheet.Till);
+                    result += TimeSheetsBusinessLayer.GetMonthAmount(callOffOrderRate.Amount, timeSheetSpantTime,
+                        timeSheet.From, timeSheet.Till);
                 else
                 {
                     _logger.LogWarning($"Unknown rate {callOffOrderRate.Unit}");
@@ -360,7 +362,7 @@ namespace Cmas.Services.TimeSheets
                     throw new Exception(string.Format("Ставка с id {0} не найдена в наряд заказе с id {1}", rateId,
                         callOffOrder.Id));
 
-                 
+
                 switch (callOffRate.Unit)
                 {
                     case RateUnit.Day:
@@ -435,8 +437,13 @@ namespace Cmas.Services.TimeSheets
         /// <summary>
         /// Получить вложение
         /// </summary>
-        public async Task<Attachment> GetAttachmentAsync(string timeSheetId, string fileName)
+        public async Task<Attachment> GetAttachmentAsync(string timeSheetId, string fileName, string token)
         {
+            bool valid = await _timeSheetsBusinessLayer.IsTempAttachmentTokenValid(timeSheetId, fileName, token);
+
+            if (!valid)
+                throw new ForbiddenErrorException();
+
             var timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(timeSheetId);
 
             if (timeSheet == null)
@@ -448,6 +455,8 @@ namespace Cmas.Services.TimeSheets
             {
                 throw new InvalidOperationException("attachment with this name not exists");
             }
+
+            await _timeSheetsBusinessLayer.DeleteTempAttachmentToken(timeSheetId, fileName, token);
 
             return await _timeSheetsBusinessLayer.GetAttachmentAsync(timeSheet, fileName);
         }
@@ -467,6 +476,25 @@ namespace Cmas.Services.TimeSheets
             }
 
             return result.ToArray();
+        }
+
+        /// <summary>
+        /// Создать временный токен для скачки файла
+        /// </summary>
+        public async Task<string> CreateTempAttachmentTokenAsync(string timeSheetId, string fileName)
+        {
+            var timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(timeSheetId);
+
+            if (timeSheet == null)
+                throw new GeneralServiceErrorException($"time-sheet {timeSheetId} not found");
+
+            var attachExist =
+                timeSheet.Attachments.Any(a => a.Key.Equals(fileName, StringComparison.OrdinalIgnoreCase));
+
+            if (!attachExist)
+                throw new GeneralServiceErrorException($"attachment {fileName} not found");
+
+            return await _timeSheetsBusinessLayer.CreateTempAttachmentToken(timeSheetId, fileName);
         }
     }
 }
