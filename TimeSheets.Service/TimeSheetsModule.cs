@@ -150,7 +150,9 @@ namespace Cmas.Services.TimeSheets
         {
             var request = this.Bind<FileUploadRequest>();
 
-            return await _timeSheetsService.AddAttachmentAsync((string) args.id, request.File.Name, request.File.Value,
+            String fileName = Uri.EscapeDataString(request.File.Name);
+
+            return await _timeSheetsService.AddAttachmentAsync((string) args.id, fileName, request.File.Value,
                 request.File.ContentType);
         }
 
