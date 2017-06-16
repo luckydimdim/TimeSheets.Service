@@ -35,7 +35,7 @@ namespace Cmas.Services.TimeSheets
 
         public RequestsModule(IServiceProvider serviceProvider) : base("/time-sheets")
         {
-            this.RequiresAnyRole(new[] {Role.Contractor, Role.Customer}, except: new[] { "download-attachment" });
+            this.RequiresAnyRole(new[] {Role.Contractor, Role.Customer, Role.Administrator}, except: new[] { "download-attachment" });
             _serviceProvider = serviceProvider;
 
 
