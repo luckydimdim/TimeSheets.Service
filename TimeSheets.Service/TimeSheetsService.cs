@@ -48,7 +48,6 @@ namespace Cmas.Services.TimeSheets
     public class TimeSheetsService
     {
         private readonly CallOffOrdersBusinessLayer _callOffOrdersBusinessLayer;
-        private readonly ContractsBusinessLayer _contractsBusinessLayer;
         private readonly TimeSheetsBusinessLayer _timeSheetsBusinessLayer;
         private readonly RequestsBusinessLayer _requestsBusinessLayer;
         private readonly IMapper _autoMapper;
@@ -61,7 +60,6 @@ namespace Cmas.Services.TimeSheets
             _logger = _loggerFactory.CreateLogger<TimeSheetsService>();
 
             _callOffOrdersBusinessLayer = new CallOffOrdersBusinessLayer(serviceProvider, ctx.CurrentUser);
-            _contractsBusinessLayer = new ContractsBusinessLayer(serviceProvider, ctx.CurrentUser);
             _timeSheetsBusinessLayer = new TimeSheetsBusinessLayer(serviceProvider, ctx.CurrentUser);
             _requestsBusinessLayer = new RequestsBusinessLayer(serviceProvider, ctx.CurrentUser);
         }
