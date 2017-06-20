@@ -266,26 +266,30 @@ namespace Cmas.Services.TimeSheets
         /// <param name="month"></param>
         /// <param name="year"></param>
         /// <returns></returns>
-        public async Task UpdateTimeSheetAsync(string timeSheetId, string notes, DateTime from, DateTime till)
+        public async Task UpdateTimeSheetAsync(string timeSheetId, string notes, DateTime from, DateTime till, IDictionary<string, IList<double>> spentTimes)
         {
             TimeSheet timeSheet = await _timeSheetsBusinessLayer.GetTimeSheet(timeSheetId);
+            var callOffOrder = await _callOffOrdersBusinessLayer.GetCallOffOrder(timeSheet.CallOffOrderId);
 
             if (timeSheet == null)
             {
                 throw new NotFoundErrorException();
             }
+            
+            if (callOffOrder == null)
+                throw new InvalidOperationException("callOffOrder not found");
 
             timeSheet.Notes = notes;
-
-            // сбрасываем работы
-            if (timeSheet.From != from || timeSheet.Till != till)
-            {
-                timeSheet.SpentTime = new Dictionary<string, IEnumerable<double>>();
-                timeSheet.Amount = 0;
-            }
-
             timeSheet.From = from;
             timeSheet.Till = till;
+
+
+            foreach (var rateId in spentTimes.Keys)
+            {
+                timeSheet.SpentTime[rateId] = spentTimes[rateId];
+            }
+
+            timeSheet.Amount = GetAmount(timeSheet, callOffOrder);
 
             await _timeSheetsBusinessLayer.UpdateTimeSheet(timeSheet);
         }

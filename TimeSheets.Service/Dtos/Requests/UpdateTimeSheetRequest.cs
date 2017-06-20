@@ -1,4 +1,6 @@
-﻿using System;
+﻿using Cmas.Services.TimeSheets.Dtos.Requests.Rate;
+using System;
+using System.Collections.Generic;
 
 namespace Cmas.Services.TimeSheets.Dtos.Requests
 {
@@ -18,5 +20,10 @@ namespace Cmas.Services.TimeSheets.Dtos.Requests
         /// Примечания
         /// </summary>
         public string Notes;
+
+        /// <summary>
+        /// Ставки
+        /// </summary>
+        public IList<RateRequest> Rates;
     }
 }

@@ -207,7 +207,14 @@ namespace Cmas.Services.TimeSheets
                 throw new ValidationErrorException(validationResult.FormattedErrors);
             }
 
-            await _timeSheetsService.UpdateTimeSheetAsync(args.id, request.Notes, request.From, request.Till);
+           var spentTimes = new Dictionary<string, IList<double>>();
+
+            foreach (var rate in request.Rates)
+            {
+                spentTimes[rate.Id] = rate.SpentTime;
+            }
+
+             await _timeSheetsService.UpdateTimeSheetAsync(args.id, request.Notes, request.From, request.Till, spentTimes);
 
             return Negotiate.WithStatusCode(HttpStatusCode.OK);
         }
